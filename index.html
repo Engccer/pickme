@@ -129,26 +129,26 @@
                 <h2 tabindex="-1" id="step2Title">선발 조건 설정</h2>
 
                 <div class="setting-group">
-                    <label for="totalPick">총 선발 인원:</label>
+                    <label for="totalPick">* 선발 인원은 총 몇 명인가요?</label>
                     <input type="number" id="totalPick" min="1" placeholder="인원 입력" aria-label="총 선발 인원">
                     <span>명</span>
                 </div>
 
                 <div class="setting-group">
-                    <h3>성별 조건 (선택사항)</h3>
+                    <h3>성별 조건을 설정하시겠습니까?</h3>
                     <label class="checkbox-label">
                         <input type="checkbox" id="useGenderFilter" aria-label="성별 조건 사용">
-                        <span>성별 조건 사용</span>
+                        <span>성별 조건 사용하기</span>
                     </label>
 
                     <div id="genderSettings" class="gender-settings" style="display: none;">
                         <div class="gender-input">
-                            <label for="femalePick">여학생:</label>
+                            <label for="femalePick">* 여학생은 몇 명 선발하나요?</label>
                             <input type="number" id="femalePick" min="0" placeholder="0" aria-label="여학생 선발 인원">
                             <span>명</span>
                         </div>
                         <div class="gender-input">
-                            <label for="malePick">남학생:</label>
+                            <label for="malePick">* 남학생은 몇 명 선발하나요?</label>
                             <input type="number" id="malePick" min="0" placeholder="0" aria-label="남학생 선발 인원">
                             <span>명</span>
                         </div>
@@ -156,8 +156,8 @@
                 </div>
 
                 <div class="setting-group">
-                    <label for="purpose">선발 목적 (선택사항):</label>
-                    <input type="text" id="purpose" placeholder="예: 행사 도우미, 청소 당번 등" aria-label="선발 목적">
+                    <label for="purpose">어떤 역할을 뽑나요? (예: 우리 반 앰배서더, 오늘의 청소 당번 등)</label>
+                    <input type="text" id="purpose" placeholder="" aria-label="선발 역할">
                 </div>
             </section>
             <div class="step-navigation">
@@ -271,6 +271,9 @@
                     <button id="resetBtn" class="action-btn" aria-label="다시 선발">
                         🔄 다시 선발
                     </button>
+                </div>
+                <div class="feedback-section">
+                    <p>개선 의견이 있으신가요? <a href="https://github.com/Engccer/pickme/issues" target="_blank" rel="noopener noreferrer">GitHub 이슈</a>로 제안해주세요!</p>
                 </div>
             </section>
         </div>

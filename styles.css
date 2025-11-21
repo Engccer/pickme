@@ -998,6 +998,40 @@ header p {
     transform: translateY(-2px);
 }
 
+/* 피드백 섹션 */
+.feedback-section {
+    margin-top: 32px;
+    padding: 20px;
+    text-align: center;
+    background: var(--background);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+}
+
+.feedback-section p {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.feedback-section a {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.feedback-section a:hover {
+    color: #3730a3;
+    text-decoration: underline;
+}
+
+.feedback-section a:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
 /* 애니메이션 */
 @keyframes slideDown {
     from {
@@ -1180,6 +1214,16 @@ input:focus,
         height: 32px;
         line-height: 32px;
         font-size: 1rem;
+    }
+
+    /* 피드백 섹션 */
+    .feedback-section {
+        padding: 16px;
+        margin-top: 24px;
+    }
+
+    .feedback-section p {
+        font-size: 0.9rem;
     }
 
     /* 네비게이션 버튼 */
@@ -1553,6 +1597,16 @@ input:focus,
     .action-btn {
         padding: 14px 20px;
         font-size: 1rem;
+    }
+
+    /* 피드백 섹션 */
+    .feedback-section {
+        padding: 14px;
+        margin-top: 20px;
+    }
+
+    .feedback-section p {
+        font-size: 0.85rem;
     }
 
     /* 설정 */
