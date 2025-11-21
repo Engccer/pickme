@@ -259,6 +259,299 @@ header p {
     font-size: 1.5rem;
 }
 
+/* 탭 UI */
+.input-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.tab-btn {
+    flex: 1;
+    padding: 12px 24px;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: inherit;
+}
+
+.tab-btn:hover {
+    color: var(--primary-color);
+    background: var(--background);
+}
+
+.tab-btn.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+}
+
+.tab-btn:focus {
+    outline: 3px solid var(--primary-color);
+    outline-offset: -3px;
+}
+
+.tab-panel {
+    display: none;
+    animation: fadeIn 0.3s ease;
+}
+
+.tab-panel.active {
+    display: block;
+}
+
+/* 직접 입력 UI */
+.manual-input-section {
+    margin-bottom: 24px;
+}
+
+.manual-input-section h3 {
+    font-size: 1.1rem;
+    margin-bottom: 12px;
+    color: var(--text-primary);
+}
+
+.common-info-inputs {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.common-info-inputs label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+}
+
+.common-info-inputs input[type="number"] {
+    width: 80px;
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: all 0.2s ease;
+}
+
+.common-info-inputs input[type="number"]:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+/* Textarea */
+#manualNames {
+    width: 100%;
+    padding: 16px;
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 1rem;
+    font-family: inherit;
+    line-height: 1.6;
+    resize: vertical;
+    transition: all 0.2s ease;
+}
+
+#manualNames:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+#manualNames::placeholder {
+    color: var(--text-secondary);
+    opacity: 0.7;
+}
+
+/* 성별 토글 */
+.gender-toggle-wrapper {
+    margin-top: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.gender-toggle-wrapper > label {
+    font-weight: 500;
+}
+
+.gender-toggle {
+    display: inline-flex;
+    background: var(--background);
+    border: 2px solid var(--border-color);
+    border-radius: 10px;
+    padding: 4px;
+    gap: 4px;
+}
+
+.toggle-btn {
+    padding: 10px 20px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+    min-width: 70px;
+}
+
+.toggle-btn:hover {
+    background: rgba(79, 70, 229, 0.1);
+    color: var(--primary-color);
+}
+
+.toggle-btn.active {
+    background: var(--primary-color);
+    color: white;
+    box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3);
+}
+
+.toggle-btn:focus {
+    outline: 3px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+/* 미리보기 리스트 */
+.preview-list {
+    max-height: 300px;
+    overflow-y: auto;
+    background: var(--background);
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.preview-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    margin-bottom: 8px;
+    background: var(--surface);
+    border-radius: 8px;
+    border-left: 3px solid var(--primary-color);
+    animation: slideIn 0.3s ease;
+}
+
+.preview-item:last-child {
+    margin-bottom: 0;
+}
+
+.preview-info {
+    flex: 1;
+    font-size: 0.95rem;
+}
+
+.preview-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.preview-details-editable {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.preview-grade-class {
+    color: var(--text-secondary);
+}
+
+.preview-number-wrapper {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.preview-number-input {
+    width: 50px;
+    padding: 4px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 0.85rem;
+    text-align: center;
+    background: var(--background);
+    color: var(--text-primary);
+    transition: all 0.2s ease;
+}
+
+.preview-number-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.preview-gender-toggle {
+    display: inline-flex;
+    gap: 2px;
+    background: var(--background);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 2px;
+}
+
+.preview-gender-btn {
+    padding: 4px 8px;
+    border: none;
+    background: transparent;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.preview-gender-btn.active {
+    background: var(--primary-color);
+    color: white;
+}
+
+.preview-gender-btn:hover:not(.active) {
+    background: var(--background);
+    color: var(--text-primary);
+}
+
+.preview-gender-btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.3);
+}
+
+.preview-item-delete {
+    padding: 6px 12px;
+    background: var(--danger-color);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.preview-item-delete:hover {
+    background: #DC2626;
+    transform: scale(1.05);
+}
+
+.preview-item-delete:focus {
+    outline: 3px solid var(--danger-color);
+    outline-offset: 2px;
+}
+
 /* 설정 그룹 */
 .setting-group {
     margin-bottom: 32px;
@@ -898,6 +1191,54 @@ input:focus,
     .start-btn {
         font-size: 1.1rem;
     }
+
+    /* 직접 입력 */
+    .tab-btn {
+        font-size: 1rem;
+        padding: 10px 16px;
+    }
+
+    #manualNames {
+        font-size: 0.95rem;
+        padding: 12px;
+    }
+
+    .toggle-btn {
+        padding: 8px 16px;
+        font-size: 0.95rem;
+        min-width: 60px;
+    }
+
+    .common-info-inputs input[type="number"] {
+        width: 70px;
+        font-size: 0.95rem;
+    }
+
+    .preview-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .preview-item-delete {
+        align-self: flex-end;
+    }
+
+    .preview-details-editable {
+        font-size: 0.8rem;
+        gap: 6px;
+    }
+
+    .preview-number-input {
+        width: 45px;
+        font-size: 0.8rem;
+        padding: 3px 6px;
+    }
+
+    .preview-gender-btn {
+        font-size: 0.75rem;
+        padding: 3px 6px;
+    }
 }
 
 /* 스크롤바 스타일 */
@@ -1227,6 +1568,75 @@ input:focus,
 
     .student-count strong {
         font-size: 1.3rem;
+    }
+
+    /* 직접 입력 */
+    .tab-btn {
+        font-size: 0.9rem;
+        padding: 8px 12px;
+    }
+
+    .manual-input-section h3 {
+        font-size: 1rem;
+    }
+
+    #manualNames {
+        font-size: 0.9rem;
+        padding: 10px;
+        rows: 6;
+    }
+
+    .gender-toggle-wrapper {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .toggle-btn {
+        padding: 8px 12px;
+        font-size: 0.9rem;
+        min-width: 55px;
+    }
+
+    .common-info-inputs {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .common-info-inputs input[type="number"] {
+        width: 100%;
+    }
+
+    .preview-list {
+        max-height: 250px;
+    }
+
+    .preview-info {
+        font-size: 0.9rem;
+    }
+
+    .preview-name {
+        font-size: 0.95rem;
+    }
+
+    .preview-details-editable {
+        font-size: 0.75rem;
+        gap: 4px;
+    }
+
+    .preview-number-input {
+        width: 40px;
+        font-size: 0.75rem;
+        padding: 2px 4px;
+    }
+
+    .preview-gender-btn {
+        font-size: 0.7rem;
+        padding: 2px 5px;
+    }
+
+    .preview-item-delete {
+        font-size: 0.8rem;
+        padding: 5px 10px;
     }
 }
 

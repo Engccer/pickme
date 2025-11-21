@@ -9,7 +9,10 @@ const AppState = {
     shouldStop: false,
     ambientSoundInterval: null,
     bgMusicInterval: null,
-    pickedStudentsLive: []
+    pickedStudentsLive: [],
+    currentInputMethod: 'csv', // 'csv' 또는 'manual'
+    selectedGender: '', // '여', '남', '' (기본값: 표기 안 함)
+    tempStudents: [] // 직접 입력 시 임시 저장
 };
 
 // DOM 요소
@@ -25,6 +28,22 @@ const elements = {
     studentCount: null,
     totalStudents: null,
     step1Next: null,
+    // Step 1 - 탭
+    csvTab: null,
+    manualTab: null,
+    csvPanel: null,
+    manualPanel: null,
+    // Step 1 - 직접 입력
+    manualGrade: null,
+    manualClass: null,
+    manualNames: null,
+    autoNumber: null,
+    genderFemale: null,
+    genderMale: null,
+    genderNone: null,
+    manualPreviewSection: null,
+    previewCount: null,
+    previewList: null,
 
     // Step 2
     totalPick: null,
@@ -90,6 +109,22 @@ function initElements() {
     elements.studentCount = document.getElementById('studentCount');
     elements.totalStudents = document.getElementById('totalStudents');
     elements.step1Next = document.getElementById('step1Next');
+    // Step 1 - 탭
+    elements.csvTab = document.getElementById('csvTab');
+    elements.manualTab = document.getElementById('manualTab');
+    elements.csvPanel = document.getElementById('csvPanel');
+    elements.manualPanel = document.getElementById('manualPanel');
+    // Step 1 - 직접 입력
+    elements.manualGrade = document.getElementById('manualGrade');
+    elements.manualClass = document.getElementById('manualClass');
+    elements.manualNames = document.getElementById('manualNames');
+    elements.autoNumber = document.getElementById('autoNumber');
+    elements.genderFemale = document.getElementById('genderFemale');
+    elements.genderMale = document.getElementById('genderMale');
+    elements.genderNone = document.getElementById('genderNone');
+    elements.manualPreviewSection = document.getElementById('manualPreviewSection');
+    elements.previewCount = document.getElementById('previewCount');
+    elements.previewList = document.getElementById('previewList');
 
     // Step 2
     elements.totalPick = document.getElementById('totalPick');
@@ -136,11 +171,27 @@ function initElements() {
 
 // 이벤트 리스너 초기화
 function initEventListeners() {
+    // Step 1: 탭 전환
+    elements.csvTab.addEventListener('click', () => switchInputTab('csv'));
+    elements.manualTab.addEventListener('click', () => switchInputTab('manual'));
+
     // Step 1: CSV 파일 업로드
     elements.fileSelectBtn.addEventListener('click', () => {
         elements.csvFile.click();
     });
     elements.csvFile.addEventListener('change', handleFileUpload);
+
+    // Step 1: 직접 입력
+    elements.manualNames.addEventListener('input', handleManualInput);
+    elements.manualGrade.addEventListener('input', handleManualInput);
+    elements.manualClass.addEventListener('input', handleManualInput);
+    elements.autoNumber.addEventListener('change', handleManualInput);
+
+    // 성별 토글
+    elements.genderFemale.addEventListener('click', () => handleGenderToggle('여'));
+    elements.genderMale.addEventListener('click', () => handleGenderToggle('남'));
+    elements.genderNone.addEventListener('click', () => handleGenderToggle(''));
+
     elements.step1Next.addEventListener('click', () => goToStep(2));
 
     // Step 2: 설정
@@ -272,6 +323,19 @@ function goToStep(stepNumber) {
 
     if (!currentStepEl || !nextStepEl) return;
 
+    // Step 1에서 Step 2로 이동 시, 직접 입력한 학생 저장
+    if (AppState.currentStep === 1 && stepNumber === 2) {
+        if (AppState.currentInputMethod === 'manual' && AppState.tempStudents) {
+            AppState.students = AppState.tempStudents;
+
+            // UI 업데이트
+            elements.studentCount.style.display = 'block';
+            elements.totalStudents.textContent = AppState.students.length;
+
+            announceToScreenReader(`${AppState.students.length}명의 학생이 입력되었습니다`);
+        }
+    }
+
     // 애니메이션 방향 결정
     const direction = stepNumber > AppState.currentStep ? 'right' : 'left';
 
@@ -332,7 +396,23 @@ async function handleFileUpload(event) {
     if (!file) return;
 
     try {
-        const text = await file.text();
+        // UTF-8 BOM 처리를 위해 ArrayBuffer로 읽기
+        const arrayBuffer = await file.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+
+        // UTF-8 BOM 제거 (EF BB BF)
+        let offset = 0;
+        if (uint8Array.length >= 3 &&
+            uint8Array[0] === 0xEF &&
+            uint8Array[1] === 0xBB &&
+            uint8Array[2] === 0xBF) {
+            offset = 3;
+        }
+
+        // UTF-8 디코딩
+        const decoder = new TextDecoder('utf-8');
+        const text = decoder.decode(uint8Array.slice(offset));
+
         parseCSV(text);
 
         elements.fileInfo.textContent = `${file.name} (${AppState.students.length}명)`;
@@ -807,4 +887,246 @@ function announceToScreenReader(message) {
             elements.srAnnounce.textContent = message;
         }, 100);
     }
+}
+
+// ===== 직접 입력 기능 =====
+
+// 탭 전환
+function switchInputTab(method) {
+    AppState.currentInputMethod = method;
+
+    // 탭 버튼 상태 업데이트
+    if (method === 'csv') {
+        elements.csvTab.classList.add('active');
+        elements.manualTab.classList.remove('active');
+        elements.csvTab.setAttribute('aria-selected', 'true');
+        elements.manualTab.setAttribute('aria-selected', 'false');
+
+        // 패널 전환
+        elements.csvPanel.classList.add('active');
+        elements.manualPanel.classList.remove('active');
+    } else {
+        elements.manualTab.classList.add('active');
+        elements.csvTab.classList.remove('active');
+        elements.manualTab.setAttribute('aria-selected', 'true');
+        elements.csvTab.setAttribute('aria-selected', 'false');
+
+        // 패널 전환
+        elements.manualPanel.classList.add('active');
+        elements.csvPanel.classList.remove('active');
+    }
+}
+
+// 성별 토글 처리
+function handleGenderToggle(gender) {
+    AppState.selectedGender = gender;
+
+    // 모든 버튼 비활성화
+    [elements.genderFemale, elements.genderMale, elements.genderNone].forEach(btn => {
+        btn.classList.remove('active');
+        btn.setAttribute('aria-checked', 'false');
+    });
+
+    // 선택된 버튼 활성화
+    if (gender === '여') {
+        elements.genderFemale.classList.add('active');
+        elements.genderFemale.setAttribute('aria-checked', 'true');
+    } else if (gender === '남') {
+        elements.genderMale.classList.add('active');
+        elements.genderMale.setAttribute('aria-checked', 'true');
+    } else {
+        elements.genderNone.classList.add('active');
+        elements.genderNone.setAttribute('aria-checked', 'true');
+    }
+
+    // 새로운 성별로 미리보기 업데이트
+    handleManualInput();
+}
+
+// 직접 입력 처리
+function handleManualInput() {
+    const namesText = elements.manualNames.value.trim();
+
+    // 이름이 없으면 미리보기 숨김
+    if (!namesText) {
+        elements.manualPreviewSection.style.display = 'none';
+        elements.step1Next.disabled = true;
+        return;
+    }
+
+    // 이름 파싱
+    const names = parseManualNames(namesText);
+
+    if (names.length === 0) {
+        elements.manualPreviewSection.style.display = 'none';
+        elements.step1Next.disabled = true;
+        return;
+    }
+
+    // 공통 정보 가져오기
+    const grade = elements.manualGrade.value.trim();
+    const classNum = elements.manualClass.value.trim();
+    const autoNumber = elements.autoNumber.checked;
+    const gender = AppState.selectedGender;
+
+    // 학생 객체 배열 생성
+    const students = names.map((name, index) => ({
+        grade: grade || '-',
+        class: classNum || '-',
+        number: autoNumber ? String(index + 1) : '-',
+        name: name,
+        gender: gender || '-',
+        secretPick: false
+    }));
+
+    // 임시 저장 (미리보기용)
+    AppState.tempStudents = students;
+
+    // 미리보기 렌더링
+    renderPreview(students);
+
+    // 다음 버튼 활성화
+    elements.step1Next.disabled = false;
+}
+
+// 이름 파싱 (줄바꿈으로 구분)
+function parseManualNames(text) {
+    return text
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0);
+}
+
+// 미리보기 렌더링
+function renderPreview(students) {
+    elements.previewList.innerHTML = '';
+    elements.previewCount.textContent = students.length;
+    elements.manualPreviewSection.style.display = 'block';
+
+    students.forEach((student, index) => {
+        const div = document.createElement('div');
+        div.className = 'preview-item';
+
+        // 학생 정보
+        const info = document.createElement('div');
+        info.className = 'preview-info';
+
+        // 이름 (읽기 전용)
+        const nameLine = document.createElement('div');
+        nameLine.className = 'preview-name';
+        nameLine.textContent = student.name;
+        info.appendChild(nameLine);
+
+        // 상세 정보 (편집 가능)
+        const detailLine = document.createElement('div');
+        detailLine.className = 'preview-details-editable';
+
+        // 학년/반 (읽기 전용)
+        if (student.grade !== '-' || student.class !== '-') {
+            const gradeClass = document.createElement('span');
+            gradeClass.className = 'preview-grade-class';
+            const parts = [];
+            if (student.grade !== '-') parts.push(`${student.grade}학년`);
+            if (student.class !== '-') parts.push(`${student.class}반`);
+            gradeClass.textContent = parts.join(' ');
+            detailLine.appendChild(gradeClass);
+        }
+
+        // 번호 (편집 가능)
+        const numberWrapper = document.createElement('span');
+        numberWrapper.className = 'preview-number-wrapper';
+        const numberInput = document.createElement('input');
+        numberInput.type = 'text';
+        numberInput.className = 'preview-number-input';
+        numberInput.value = student.number === '-' ? '' : student.number;
+        numberInput.placeholder = '번호';
+        numberInput.setAttribute('aria-label', `${student.name} 번호`);
+        numberInput.addEventListener('change', (e) => updatePreviewItem(index, 'number', e.target.value));
+        numberWrapper.appendChild(numberInput);
+        numberWrapper.appendChild(document.createTextNode('번'));
+        detailLine.appendChild(numberWrapper);
+
+        // 성별 (편집 가능 - 토글)
+        const genderToggleContainer = document.createElement('div');
+        genderToggleContainer.className = 'preview-gender-toggle';
+        genderToggleContainer.setAttribute('role', 'radiogroup');
+        genderToggleContainer.setAttribute('aria-label', `${student.name} 성별 선택`);
+
+        const genderOptions = [
+            { value: '여', text: '여' },
+            { value: '남', text: '남' },
+            { value: '-', text: '표기 안 함' }
+        ];
+
+        genderOptions.forEach(opt => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'preview-gender-btn';
+            if (opt.value === student.gender) {
+                btn.classList.add('active');
+                btn.setAttribute('aria-checked', 'true');
+            } else {
+                btn.setAttribute('aria-checked', 'false');
+            }
+            btn.textContent = opt.text;
+            btn.setAttribute('role', 'radio');
+            btn.setAttribute('data-value', opt.value);
+            btn.addEventListener('click', () => {
+                // 같은 그룹의 모든 버튼 비활성화
+                genderToggleContainer.querySelectorAll('.preview-gender-btn').forEach(b => {
+                    b.classList.remove('active');
+                    b.setAttribute('aria-checked', 'false');
+                });
+                // 현재 버튼 활성화
+                btn.classList.add('active');
+                btn.setAttribute('aria-checked', 'true');
+                // 값 업데이트
+                updatePreviewItem(index, 'gender', opt.value);
+            });
+            genderToggleContainer.appendChild(btn);
+        });
+
+        detailLine.appendChild(genderToggleContainer);
+
+        info.appendChild(detailLine);
+
+        // 삭제 버튼
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'preview-item-delete';
+        deleteBtn.textContent = '삭제';
+        deleteBtn.setAttribute('aria-label', `${student.name} 삭제`);
+        deleteBtn.addEventListener('click', () => deletePreviewItem(index));
+
+        div.appendChild(info);
+        div.appendChild(deleteBtn);
+        elements.previewList.appendChild(div);
+    });
+}
+
+// 미리보기 항목 업데이트
+function updatePreviewItem(index, field, value) {
+    if (!AppState.tempStudents || !AppState.tempStudents[index]) return;
+
+    // 값 업데이트
+    if (field === 'number') {
+        AppState.tempStudents[index].number = value.trim() || '-';
+    } else if (field === 'gender') {
+        AppState.tempStudents[index].gender = value;
+    }
+}
+
+// 미리보기 항목 삭제
+function deletePreviewItem(index) {
+    // 현재 이름 목록 가져오기
+    const namesText = elements.manualNames.value.trim();
+    const names = parseManualNames(namesText);
+
+    // 해당 인덱스 삭제
+    names.splice(index, 1);
+
+    // textarea 업데이트
+    elements.manualNames.value = names.join('\n');
+
+    // 미리보기 재렌더링
+    handleManualInput();
 }

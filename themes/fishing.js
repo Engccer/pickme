@@ -150,7 +150,7 @@ async function runFishingAnimation(canvas, selectedStudents, addPickedStudent) {
         let isReeling = false;
         let caughtFish = null;
         let currentPickIndex = 0;
-        let waitTime = 0;
+        let waitTime = -360; // 초기 대기 시간 약 6초 (60fps 기준)
         let cycleTime = 0; // 전체 사이클 경과 시간
         const maxCycleTime = 360; // 약 6초 (60fps 기준)
 
@@ -163,7 +163,7 @@ async function runFishingAnimation(canvas, selectedStudents, addPickedStudent) {
             }
         }
 
-        updateMessage('낚시를 시작합니다...');
+        updateMessage('낚시대를 준비하고 있습니다...');
 
         // 물결 애니메이션
         function animateWater(time) {
