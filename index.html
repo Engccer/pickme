@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pick Me</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 Pick Me</h1>
+            <p>무작위 학생 선발 도구</p>
+        </header>
+
+        <!-- 진행 표시기 -->
+        <div class="progress-bar" id="progressBar">
+            <div class="progress-step active" data-step="1">
+                <div class="step-circle">1</div>
+                <div class="step-label">명단</div>
+            </div>
+            <div class="progress-step" data-step="2">
+                <div class="step-circle">2</div>
+                <div class="step-label">조건</div>
+            </div>
+            <div class="progress-step" data-step="3">
+                <div class="step-circle">3</div>
+                <div class="step-label">제외</div>
+            </div>
+            <div class="progress-step" data-step="4">
+                <div class="step-circle">4</div>
+                <div class="step-label">테마</div>
+            </div>
+        </div>
+
+        <!-- Step 1: CSV 파일 업로드 -->
+        <div class="step-container active" id="step1">
+            <section class="section">
+                <h2 tabindex="-1" id="step1Title">학생 명단 불러오기</h2>
+                <div class="upload-area">
+                    <input type="file" id="csvFile" accept=".csv" aria-label="CSV 파일 선택" style="display: none;">
+                    <button type="button" class="file-select-btn" id="fileSelectBtn" aria-label="CSV 파일 선택">
+                        <span class="file-icon">📁</span>
+                        <span class="file-text">csv 파일을 선택하세요</span>
+                    </button>
+                    <p class="file-info" id="fileInfo">파일을 선택하지 않았습니다</p>
+                </div>
+                <div class="student-count" id="studentCount" style="display: none;">
+                    총 <strong id="totalStudents">0</strong>명의 학생
+                </div>
+            </section>
+            <div class="step-navigation">
+                <button class="nav-btn next-btn" id="step1Next" disabled aria-label="다음 단계">
+                    다음 <span>→</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Step 2: 선발 조건 설정 -->
+        <div class="step-container" id="step2">
+            <section class="section">
+                <h2 tabindex="-1" id="step2Title">선발 조건 설정</h2>
+
+                <div class="setting-group">
+                    <label for="totalPick">총 선발 인원:</label>
+                    <input type="number" id="totalPick" min="1" placeholder="인원 입력" aria-label="총 선발 인원">
+                    <span>명</span>
+                </div>
+
+                <div class="setting-group">
+                    <h3>성별 조건 (선택사항)</h3>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="useGenderFilter" aria-label="성별 조건 사용">
+                        <span>성별 조건 사용</span>
+                    </label>
+
+                    <div id="genderSettings" class="gender-settings" style="display: none;">
+                        <div class="gender-input">
+                            <label for="femalePick">여학생:</label>
+                            <input type="number" id="femalePick" min="0" placeholder="0" aria-label="여학생 선발 인원">
+                            <span>명</span>
+                        </div>
+                        <div class="gender-input">
+                            <label for="malePick">남학생:</label>
+                            <input type="number" id="malePick" min="0" placeholder="0" aria-label="남학생 선발 인원">
+                            <span>명</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <label for="purpose">선발 목적 (선택사항):</label>
+                    <input type="text" id="purpose" placeholder="예: 행사 도우미, 청소 당번 등" aria-label="선발 목적">
+                </div>
+            </section>
+            <div class="step-navigation">
+                <button class="nav-btn back-btn" id="step2Back" aria-label="이전 단계">
+                    <span>←</span> 이전
+                </button>
+                <button class="nav-btn next-btn" id="step2Next" disabled aria-label="다음 단계">
+                    다음 <span>→</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Step 3: Opt-out 학생 선택 -->
+        <div class="step-container" id="step3">
+            <section class="section">
+                <h2 tabindex="-1" id="step3Title">제외할 학생 선택</h2>
+                <p class="section-description">선발에서 제외할 학생이 있다면 선택하세요</p>
+                <div class="optout-container" id="optoutContainer">
+                    <!-- 학생 목록이 동적으로 추가됩니다 -->
+                </div>
+            </section>
+            <div class="step-navigation">
+                <button class="nav-btn back-btn" id="step3Back" aria-label="이전 단계">
+                    <span>←</span> 이전
+                </button>
+                <button class="nav-btn next-btn" id="step3Next" aria-label="다음 단계">
+                    다음 <span>→</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Step 4: 테마 선택 -->
+        <div class="step-container" id="step4">
+            <section class="section">
+                <h2 tabindex="-1" id="step4Title">테마 선택</h2>
+                <p class="section-description">선발 애니메이션 테마를 선택하세요</p>
+                <div class="theme-selector" role="radiogroup" aria-label="테마 선택">
+                    <button type="button" class="theme-card" data-theme="roulette" role="radio" aria-checked="true">
+                        <span class="theme-icon">🎰</span>
+                        <span class="theme-name">룰렛</span>
+                        <p class="theme-desc">회전하는 룰렛으로 선발</p>
+                    </button>
+                    <button type="button" class="theme-card" data-theme="lottery" role="radio" aria-checked="false">
+                        <span class="theme-icon">🎱</span>
+                        <span class="theme-name">로또</span>
+                        <p class="theme-desc">공이 튀어나오는 연출</p>
+                    </button>
+                    <button type="button" class="theme-card" data-theme="fishing" role="radio" aria-checked="false">
+                        <span class="theme-icon">🎣</span>
+                        <span class="theme-name">낚시</span>
+                        <p class="theme-desc">낚시로 학생 선발</p>
+                    </button>
+                </div>
+            </section>
+            <div class="step-navigation">
+                <button class="nav-btn back-btn" id="step4Back" aria-label="이전 단계">
+                    <span>←</span> 이전
+                </button>
+                <button class="nav-btn start-btn" id="startBtn" aria-label="선발 시작">
+                    🎯 선발 시작!
+                </button>
+            </div>
+        </div>
+
+        <!-- 3D 애니메이션 영역 -->
+        <div id="animationContainer" class="animation-container" style="display: none;">
+            <canvas id="threeCanvas"></canvas>
+            <div class="animation-overlay">
+                <div class="animation-message" id="animationMessage"></div>
+                <div class="picked-students-live" id="pickedStudentsLive" aria-live="polite" aria-atomic="true">
+                    <!-- 선발된 학생 실시간 표시 -->
+                </div>
+                <div class="animation-controls">
+                    <button class="pause-btn" id="pauseBtn" aria-label="일시 정지">
+                        ⏸ 일시 정지
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 일시 중지 메뉴 -->
+        <div id="pauseMenu" class="pause-menu" style="display: none;">
+            <div class="pause-content">
+                <h2>일시 중지</h2>
+                <p>선발을 중지했습니다</p>
+                <div class="pause-actions">
+                    <button class="action-btn" id="resumeBtn" aria-label="계속하기">
+                        ▶ 계속하기
+                    </button>
+                    <button class="action-btn" id="backToStartBtn" aria-label="처음으로">
+                        ↩ 처음으로
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 결과 표시 -->
+        <div class="step-container" id="stepResult" style="display: none;">
+            <section class="section">
+                <h2 tabindex="-1" id="resultTitle">선발 결과</h2>
+                <div class="congratulations-message" id="congratulationsMessage" style="display: none;">
+                    <!-- 축하 메시지가 동적으로 추가됩니다 -->
+                </div>
+                <div class="result-container" id="resultContainer">
+                    <!-- 결과가 동적으로 추가됩니다 -->
+                </div>
+                <div class="result-actions">
+                    <button id="saveResultBtn" class="action-btn" aria-label="결과 저장">
+                        💾 결과 저장
+                    </button>
+                    <button id="resetBtn" class="action-btn" aria-label="다시 선발">
+                        🔄 다시 선발
+                    </button>
+                </div>
+            </section>
+        </div>
+
+        <!-- 스크린 리더 전용 라이브 영역 -->
+        <div aria-live="polite" aria-atomic="true" class="sr-only" id="srAnnounce"></div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="sounds.js"></script>
+    <script src="app.js"></script>
+    <script src="themes/roulette.js"></script>
+    <script src="themes/lottery.js"></script>
+    <script src="themes/fishing.js"></script>
+</body>
+</html>
