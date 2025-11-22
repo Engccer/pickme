@@ -989,12 +989,12 @@ function handleManualInput() {
     elements.step1Next.disabled = false;
 }
 
-// 이름 파싱 (줄바꿈으로 구분)
+// 이름 파싱 (줄바꿈, 콤마, 공백으로 구분)
 function parseManualNames(text) {
     return text
-        .split('\n')
-        .map(line => line.trim())
-        .filter(line => line.length > 0);
+        .split(/[\n,\s]+/)  // 줄바꿈, 콤마, 공백을 구분자로 사용
+        .map(name => name.trim())
+        .filter(name => name.length > 0);
 }
 
 // 미리보기 렌더링
