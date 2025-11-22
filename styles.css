@@ -37,7 +37,6 @@ body {
 
 /* 헤더 */
 header {
-    text-align: center;
     padding: 30px 20px;
     background: linear-gradient(135deg, var(--primary-color), #7C3AED);
     color: white;
@@ -45,6 +44,18 @@ header {
     margin-bottom: 30px;
     box-shadow: var(--shadow-lg);
     animation: slideDown 0.5s ease;
+}
+
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+}
+
+.header-text {
+    flex: 1;
+    text-align: center;
 }
 
 header h1 {
@@ -56,6 +67,54 @@ header h1 {
 header p {
     font-size: 1.1rem;
     opacity: 0.9;
+}
+
+/* 헤더 내 앱 사용법 링크 */
+header .usage-guide-link {
+    color: white;
+    text-decoration: none;
+    font-size: 1rem;
+    font-weight: 600;
+    padding: 10px 20px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+    backdrop-filter: blur(10px);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+header .usage-guide-link:hover {
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.7);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+header .usage-guide-link:active {
+    transform: translateY(0);
+}
+
+header .usage-guide-link:focus {
+    outline: 3px solid rgba(255, 255, 255, 0.5);
+    outline-offset: 2px;
+}
+
+/* 모바일 반응형 */
+@media (max-width: 600px) {
+    .header-content {
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .header-text {
+        text-align: center;
+    }
+
+    header .usage-guide-link {
+        font-size: 0.9rem;
+        padding: 8px 16px;
+    }
 }
 
 /* 진행 표시기 */
@@ -243,6 +302,57 @@ header p {
     margin-top: 16px;
     color: var(--text-secondary);
     font-size: 0.9rem;
+}
+
+.file-delete-btn {
+    margin-top: 16px;
+    padding: 10px 20px;
+    background: var(--danger-color);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.file-delete-btn:hover {
+    background: #DC2626;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(239, 68, 68, 0.3);
+}
+
+.file-delete-btn:focus {
+    outline: 3px solid var(--danger-color);
+    outline-offset: 2px;
+}
+
+.sample-download-btn {
+    display: inline-block;
+    margin-top: 12px;
+    padding: 10px 20px;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.sample-download-btn:hover {
+    background: #1E40AF;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
+}
+
+.sample-download-btn:focus {
+    outline: 3px solid var(--primary-color);
+    outline-offset: 2px;
 }
 
 .student-count {

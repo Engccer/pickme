@@ -9,8 +9,20 @@
 <body>
     <div class="container">
         <header>
-            <h1>🎯 Pick Me</h1>
-            <p>무작위 학생 선발 도구</p>
+            <div class="header-content">
+                <div class="header-text">
+                    <h1>🎯 Pick Me</h1>
+                    <p>무작위 학생 선발 도구</p>
+                </div>
+                <a href="https://github.com/Engccer/pickme#readme"
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   class="usage-guide-link"
+                   id="usageGuideLink"
+                   aria-label="앱 사용법 (Ctrl+Shift+/) - 새 탭에서 열림">
+                    앱 사용법
+                </a>
+            </div>
         </header>
 
         <!-- 진행 표시기 -->
@@ -37,7 +49,7 @@
                 <!-- 탭 버튼 -->
                 <div class="input-tabs" role="tablist" aria-label="명단 입력 방법">
                     <button class="tab-btn active" id="csvTab" role="tab" aria-selected="true" aria-controls="csvPanel">
-                        CSV 파일
+                        CSV 파일 업로드
                     </button>
                     <button class="tab-btn" id="manualTab" role="tab" aria-selected="false" aria-controls="manualPanel">
                         직접 입력
@@ -49,10 +61,21 @@
                     <div class="upload-area">
                         <input type="file" id="csvFile" accept=".csv" aria-label="CSV 파일 선택" style="display: none;">
                         <button type="button" class="file-select-btn" id="fileSelectBtn" aria-label="CSV 파일 선택">
-                            <span class="file-icon">📁</span>
-                            <span class="file-text">csv 파일을 선택하세요</span>
+                            csv 파일을 선택하세요
                         </button>
                         <p class="file-info" id="fileInfo">파일을 선택하지 않았습니다</p>
+                        <button type="button" class="file-delete-btn" id="fileDeleteBtn" style="display: none;" aria-label="파일 삭제">파일 삭제</button>
+                        <button type="button" class="sample-download-btn" id="sampleDownloadBtn" aria-label="샘플 CSV 다운로드">
+                            📥 샘플 CSV 다운로드
+                        </button>
+                    </div>
+
+                    <!-- CSV 미리보기 -->
+                    <div class="manual-input-section" id="csvPreviewSection" style="display: none;">
+                        <h3>미리보기 (<span id="csvPreviewCount">0</span>명)</h3>
+                        <div class="preview-list" id="csvPreviewList">
+                            <!-- 동적으로 추가됨 -->
+                        </div>
                     </div>
                 </div>
 
@@ -154,17 +177,6 @@
                 <div class="setting-group">
                     <label for="purpose">어떤 역할을 뽑나요? (예: 우리 반 앰배서더, 오늘의 청소 당번 등)</label>
                     <input type="text" id="purpose" placeholder="" aria-label="선발 역할">
-                </div>
-
-                <!-- 제외할 학생 섹션 (CSV 사용자만 표시) -->
-                <div class="setting-group" id="optoutSection" style="display: none;">
-                    <button type="button" class="toggle-header" id="optoutToggle" aria-expanded="false">
-                        <h3>제외할 학생이 있나요?</h3>
-                        <span class="toggle-icon" aria-hidden="true">▼</span>
-                    </button>
-                    <div class="optout-container-inline" id="optoutContainer" style="display: none;">
-                        <!-- 학생 목록이 동적으로 추가됩니다 -->
-                    </div>
                 </div>
             </section>
             <div class="step-navigation">

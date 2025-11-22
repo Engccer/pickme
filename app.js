@@ -33,6 +33,12 @@ const elements = {
     manualTab: null,
     csvPanel: null,
     manualPanel: null,
+    // Step 1 - CSV 업로드
+    fileDeleteBtn: null,
+    csvPreviewSection: null,
+    csvPreviewCount: null,
+    csvPreviewList: null,
+    sampleDownloadBtn: null,
     // Step 1 - 직접 입력
     manualGrade: null,
     manualClass: null,
@@ -52,9 +58,6 @@ const elements = {
     femalePick: null,
     malePick: null,
     purpose: null,
-    optoutSection: null,
-    optoutToggle: null,
-    optoutContainer: null,
     step2Back: null,
     step2Next: null,
 
@@ -112,6 +115,12 @@ function initElements() {
     elements.manualTab = document.getElementById('manualTab');
     elements.csvPanel = document.getElementById('csvPanel');
     elements.manualPanel = document.getElementById('manualPanel');
+    // Step 1 - CSV 업로드
+    elements.fileDeleteBtn = document.getElementById('fileDeleteBtn');
+    elements.csvPreviewSection = document.getElementById('csvPreviewSection');
+    elements.csvPreviewCount = document.getElementById('csvPreviewCount');
+    elements.csvPreviewList = document.getElementById('csvPreviewList');
+    elements.sampleDownloadBtn = document.getElementById('sampleDownloadBtn');
     // Step 1 - 직접 입력
     elements.manualGrade = document.getElementById('manualGrade');
     elements.manualClass = document.getElementById('manualClass');
@@ -131,9 +140,6 @@ function initElements() {
     elements.femalePick = document.getElementById('femalePick');
     elements.malePick = document.getElementById('malePick');
     elements.purpose = document.getElementById('purpose');
-    elements.optoutSection = document.getElementById('optoutSection');
-    elements.optoutToggle = document.getElementById('optoutToggle');
-    elements.optoutContainer = document.getElementById('optoutContainer');
     elements.step2Back = document.getElementById('step2Back');
     elements.step2Next = document.getElementById('step2Next');
 
@@ -176,6 +182,8 @@ function initEventListeners() {
         elements.csvFile.click();
     });
     elements.csvFile.addEventListener('change', handleFileUpload);
+    elements.fileDeleteBtn.addEventListener('click', clearCsvFile);
+    elements.sampleDownloadBtn.addEventListener('click', downloadSampleCSV);
 
     // Step 1: 직접 입력
     elements.manualNames.addEventListener('input', handleManualInput);
@@ -200,13 +208,6 @@ function initEventListeners() {
     elements.malePick.addEventListener('input', validateStep2);
     elements.step2Back.addEventListener('click', () => goToStep(1));
     elements.step2Next.addEventListener('click', () => goToStep(3));
-
-    // Step 2: Opt-out 토글
-    elements.optoutToggle.addEventListener('click', () => {
-        const isExpanded = elements.optoutToggle.getAttribute('aria-expanded') === 'true';
-        elements.optoutToggle.setAttribute('aria-expanded', !isExpanded);
-        elements.optoutContainer.style.display = isExpanded ? 'none' : 'grid';
-    });
 
     // Step 3: 테마 선택
     elements.themeCards.forEach(card => {
@@ -260,10 +261,17 @@ function initEventListeners() {
     elements.saveResultBtn.addEventListener('click', saveResults);
     elements.resetBtn.addEventListener('click', resetApp);
 
-    // ESC 키로 일시 중지
+    // 키보드 단축키
     document.addEventListener('keydown', (e) => {
+        // ESC 키로 일시 중지
         if (e.key === 'Escape' && elements.animationContainer.style.display === 'block' && !AppState.isPaused) {
             pausePicking();
+        }
+
+        // Ctrl+Shift+/ 로 앱 사용법 열기
+        if (e.ctrlKey && e.shiftKey && e.key === '?') {
+            e.preventDefault();
+            openUsageGuide();
         }
     });
 }
@@ -322,6 +330,11 @@ function goToStep(stepNumber) {
 
     if (!currentStepEl || !nextStepEl) return;
 
+    // aria-live 영역 초기화
+    if (elements.srAnnounce) {
+        elements.srAnnounce.textContent = '';
+    }
+
     // Step 1에서 Step 2로 이동 시, 직접 입력한 학생 저장
     if (AppState.currentStep === 1 && stepNumber === 2) {
         if (AppState.currentInputMethod === 'manual' && AppState.tempStudents) {
@@ -354,15 +367,7 @@ function goToStep(stepNumber) {
         updateProgressBar(stepNumber);
 
         // 단계별 추가 처리
-        if (stepNumber === 2) {
-            // Step 2: CSV 사용자만 제외 학생 섹션 표시
-            if (AppState.currentInputMethod === 'csv') {
-                elements.optoutSection.style.display = 'block';
-                renderOptoutList();
-            } else {
-                elements.optoutSection.style.display = 'none';
-            }
-        } else if (stepNumber === 3) {
+        if (stepNumber === 3) {
             // 테마 선택 화면에 도달하면 앰비언트 사운드 재생
             if (!soundManager.initialized) {
                 soundManager.init();
@@ -423,9 +428,16 @@ async function handleFileUpload(event) {
         elements.fileInfo.textContent = `${file.name} (${AppState.students.length}명)`;
         elements.fileInfo.style.color = 'var(--secondary-color)';
 
+        // 파일 삭제 버튼 표시
+        elements.fileDeleteBtn.style.display = 'inline-block';
+
+        // CSV 미리보기 렌더링
+        renderCsvPreview(AppState.students);
+
         // UI 업데이트
         elements.studentCount.style.display = 'block';
         elements.totalStudents.textContent = AppState.students.length;
+        updateNextButtonLabel();
         elements.step1Next.disabled = false;
 
         announceToScreenReader(`${AppState.students.length}명의 학생 명단이 로드되었습니다`);
@@ -862,6 +874,10 @@ function resetApp() {
     elements.pauseMenu.style.display = 'none';
     elements.animationContainer.classList.remove('fullscreen-animation');
     elements.pickedStudentsLiveEl.innerHTML = '';
+    // aria-live 영역 초기화
+    if (elements.srAnnounce) {
+        elements.srAnnounce.textContent = '';
+    }
     elements.steps.forEach((step, index) => {
         if (step && index > 0) {
             step.style.display = 'none';
@@ -890,6 +906,10 @@ function announceToScreenReader(message) {
         elements.srAnnounce.textContent = '';
         setTimeout(() => {
             elements.srAnnounce.textContent = message;
+            // 3초 후 자동 삭제
+            setTimeout(() => {
+                elements.srAnnounce.textContent = '';
+            }, 3000);
         }, 100);
     }
 }
@@ -990,7 +1010,8 @@ function handleManualInput() {
     // 미리보기 렌더링
     renderPreview(students);
 
-    // 다음 버튼 활성화
+    // 다음 버튼 활성화 및 라벨 업데이트
+    updateNextButtonLabel();
     elements.step1Next.disabled = false;
 }
 
@@ -1134,4 +1155,158 @@ function deletePreviewItem(index) {
 
     // 미리보기 재렌더링
     handleManualInput();
+}
+
+// CSV 미리보기 렌더링 (비밀선발 제외)
+function renderCsvPreview(students) {
+    elements.csvPreviewList.innerHTML = '';
+    elements.csvPreviewCount.textContent = students.length;
+    elements.csvPreviewSection.style.display = 'block';
+
+    students.forEach((student, index) => {
+        const div = document.createElement('div');
+        div.className = 'preview-item';
+
+        // 학생 정보
+        const info = document.createElement('div');
+        info.className = 'preview-info';
+
+        // 이름
+        const nameLine = document.createElement('div');
+        nameLine.className = 'preview-name';
+        nameLine.textContent = student.name;
+        info.appendChild(nameLine);
+
+        // 상세 정보 (학년, 반, 번호, 성별)
+        const detailLine = document.createElement('div');
+        detailLine.className = 'preview-details-editable';
+
+        const details = [];
+        if (student.grade !== '-') details.push(`${student.grade}학년`);
+        if (student.class !== '-') details.push(`${student.class}반`);
+        if (student.number !== '-') details.push(`${student.number}번`);
+        if (student.gender !== '-') details.push(student.gender);
+
+        detailLine.textContent = details.join(' ');
+        info.appendChild(detailLine);
+
+        // 삭제 버튼
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'preview-item-delete';
+        deleteBtn.textContent = '삭제';
+        deleteBtn.setAttribute('aria-label', `${student.name} 삭제`);
+        deleteBtn.addEventListener('click', () => deleteCsvPreviewItem(index));
+
+        div.appendChild(info);
+        div.appendChild(deleteBtn);
+        elements.csvPreviewList.appendChild(div);
+    });
+}
+
+// CSV 미리보기 항목 삭제
+function deleteCsvPreviewItem(index) {
+    // AppState.students에서 삭제
+    AppState.students.splice(index, 1);
+
+    // 미리보기 재렌더링
+    renderCsvPreview(AppState.students);
+
+    // UI 업데이트
+    elements.totalStudents.textContent = AppState.students.length;
+    elements.fileInfo.textContent = `${AppState.students.length}명`;
+    updateNextButtonLabel();
+
+    // 스크린 리더 알림
+    announceToScreenReader(`학생이 삭제되었습니다. 현재 ${AppState.students.length}명`);
+
+    // 학생이 0명이 되면 다음 버튼 비활성화
+    if (AppState.students.length === 0) {
+        elements.step1Next.disabled = true;
+        elements.csvPreviewSection.style.display = 'none';
+    }
+}
+
+// CSV 파일 삭제
+function clearCsvFile() {
+    // 파일 input 초기화
+    elements.csvFile.value = '';
+
+    // AppState 초기화
+    AppState.students = [];
+
+    // UI 초기화
+    elements.fileInfo.textContent = '파일을 선택하지 않았습니다';
+    elements.fileInfo.style.color = '';
+    elements.fileDeleteBtn.style.display = 'none';
+    elements.csvPreviewSection.style.display = 'none';
+    elements.studentCount.style.display = 'none';
+    elements.step1Next.disabled = true;
+
+    announceToScreenReader('파일이 삭제되었습니다');
+}
+
+// 다음 단계 버튼 라벨 업데이트
+function updateNextButtonLabel() {
+    const studentCount = AppState.currentInputMethod === 'csv'
+        ? AppState.students.length
+        : (AppState.tempStudents ? AppState.tempStudents.length : 0);
+
+    if (studentCount > 0) {
+        elements.step1Next.innerHTML = `${studentCount}명 다음 <span>→</span>`;
+        elements.step1Next.setAttribute('aria-label', `${studentCount}명 다음 단계`);
+    } else {
+        elements.step1Next.innerHTML = `다음 <span>→</span>`;
+        elements.step1Next.setAttribute('aria-label', '다음 단계');
+    }
+}
+
+// 샘플 CSV 다운로드
+function downloadSampleCSV() {
+    const csvContent = `학년,반,번호,이름,성별,비밀선발
+1,1,1,이름 1,여,1
+1,1,2,이름 2,여,1
+1,1,3,이름 3,여,1
+1,1,4,이름 4,여,0
+1,1,5,이름 5,여,0
+1,1,6,이름 6,여,0
+1,1,7,이름 7,여,0
+1,1,8,이름 8,여,0
+1,1,9,이름 9,여,0
+1,1,10,이름 10,여,0
+1,1,11,이름 11,여,0
+1,1,12,이름 12,여,0
+1,1,13,이름 13,여,0
+1,1,14,이름 14,남,1
+1,1,15,이름 15,남,1
+1,1,16,이름 16,남,1
+1,1,17,이름 17,남,0
+1,1,18,이름 18,남,0
+1,1,19,이름 19,남,0
+1,1,20,이름 20,남,0
+1,1,21,이름 21,남,0
+1,1,22,이름 22,남,0
+1,1,23,이름 23,남,0
+1,1,24,이름 24,남,0
+1,1,25,이름 25,남,0`;
+
+    // UTF-8 BOM 추가 (엑셀 호환성)
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+
+    // 다운로드 실행
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '명단파일(샘플).csv';
+    a.click();
+    URL.revokeObjectURL(url);
+
+    // 스크린 리더 알림
+    announceToScreenReader('샘플 CSV 파일이 다운로드되었습니다');
+}
+
+// 앱 사용법 열기
+function openUsageGuide() {
+    window.open('https://github.com/Engccer/pickme#readme', '_blank', 'noopener,noreferrer');
+    announceToScreenReader('앱 사용법 페이지가 새 탭에서 열렸습니다');
 }
