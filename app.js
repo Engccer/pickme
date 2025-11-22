@@ -52,17 +52,15 @@ const elements = {
     femalePick: null,
     malePick: null,
     purpose: null,
+    optoutSection: null,
+    optoutToggle: null,
+    optoutContainer: null,
     step2Back: null,
     step2Next: null,
 
     // Step 3
-    optoutContainer: null,
-    step3Back: null,
-    step3Next: null,
-
-    // Step 4
     themeCards: [],
-    step4Back: null,
+    step3Back: null,
     startBtn: null,
 
     // 애니메이션
@@ -97,7 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // DOM 요소 초기화
 function initElements() {
     // 단계 컨테이너
-    for (let i = 1; i <= 4; i++) {
+    for (let i = 1; i <= 3; i++) {
         elements.steps[i] = document.getElementById(`step${i}`);
         elements.progressSteps[i] = document.querySelector(`.progress-step[data-step="${i}"]`);
     }
@@ -133,17 +131,15 @@ function initElements() {
     elements.femalePick = document.getElementById('femalePick');
     elements.malePick = document.getElementById('malePick');
     elements.purpose = document.getElementById('purpose');
+    elements.optoutSection = document.getElementById('optoutSection');
+    elements.optoutToggle = document.getElementById('optoutToggle');
+    elements.optoutContainer = document.getElementById('optoutContainer');
     elements.step2Back = document.getElementById('step2Back');
     elements.step2Next = document.getElementById('step2Next');
 
     // Step 3
-    elements.optoutContainer = document.getElementById('optoutContainer');
-    elements.step3Back = document.getElementById('step3Back');
-    elements.step3Next = document.getElementById('step3Next');
-
-    // Step 4
     elements.themeCards = document.querySelectorAll('.theme-card');
-    elements.step4Back = document.getElementById('step4Back');
+    elements.step3Back = document.getElementById('step3Back');
     elements.startBtn = document.getElementById('startBtn');
 
     // 애니메이션
@@ -205,21 +201,24 @@ function initEventListeners() {
     elements.step2Back.addEventListener('click', () => goToStep(1));
     elements.step2Next.addEventListener('click', () => goToStep(3));
 
-    // Step 3: Opt-out
-    elements.step3Back.addEventListener('click', () => goToStep(2));
-    elements.step3Next.addEventListener('click', () => goToStep(4));
+    // Step 2: Opt-out 토글
+    elements.optoutToggle.addEventListener('click', () => {
+        const isExpanded = elements.optoutToggle.getAttribute('aria-expanded') === 'true';
+        elements.optoutToggle.setAttribute('aria-expanded', !isExpanded);
+        elements.optoutContainer.style.display = isExpanded ? 'none' : 'grid';
+    });
 
-    // Step 4: 테마 선택
+    // Step 3: 테마 선택
     elements.themeCards.forEach(card => {
         card.addEventListener('click', () => handleThemeSelect(card));
     });
-    elements.step4Back.addEventListener('click', () => {
+    elements.step3Back.addEventListener('click', () => {
         // 앰비언트 사운드 중지
         if (AppState.ambientSoundInterval) {
             soundManager.stopSound(AppState.ambientSoundInterval);
             AppState.ambientSoundInterval = null;
         }
-        goToStep(3);
+        goToStep(2);
     });
     elements.startBtn.addEventListener('click', () => {
         // 첫 클릭 시 사운드 초기화
@@ -355,9 +354,15 @@ function goToStep(stepNumber) {
         updateProgressBar(stepNumber);
 
         // 단계별 추가 처리
-        if (stepNumber === 3) {
-            renderOptoutList();
-        } else if (stepNumber === 4) {
+        if (stepNumber === 2) {
+            // Step 2: CSV 사용자만 제외 학생 섹션 표시
+            if (AppState.currentInputMethod === 'csv') {
+                elements.optoutSection.style.display = 'block';
+                renderOptoutList();
+            } else {
+                elements.optoutSection.style.display = 'none';
+            }
+        } else if (stepNumber === 3) {
             // 테마 선택 화면에 도달하면 앰비언트 사운드 재생
             if (!soundManager.initialized) {
                 soundManager.init();
@@ -622,8 +627,8 @@ function performPicking(availableStudents, options) {
 // 테마 애니메이션 실행
 async function runThemeAnimation() {
     // 테마 선택 화면 숨기기
-    elements.steps[4].style.display = 'none';
-    elements.steps[4].classList.remove('active');
+    elements.steps[3].style.display = 'none';
+    elements.steps[3].classList.remove('active');
 
     // 애니메이션 컨테이너 전체화면 표시
     elements.animationContainer.style.display = 'block';
@@ -783,8 +788,8 @@ function displayResults() {
     });
 
     // 결과 화면 표시
-    elements.steps[4].style.display = 'none';
-    elements.steps[4].classList.remove('active');
+    elements.steps[3].style.display = 'none';
+    elements.steps[3].classList.remove('active');
     elements.resultSection.style.display = 'block';
 
     // 포커스

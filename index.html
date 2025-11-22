@@ -25,10 +25,6 @@
             </div>
             <div class="progress-step" data-step="3">
                 <div class="step-circle">3</div>
-                <div class="step-label">제외</div>
-            </div>
-            <div class="progress-step" data-step="4">
-                <div class="step-circle">4</div>
                 <div class="step-label">테마</div>
             </div>
         </div>
@@ -159,6 +155,17 @@
                     <label for="purpose">어떤 역할을 뽑나요? (예: 우리 반 앰배서더, 오늘의 청소 당번 등)</label>
                     <input type="text" id="purpose" placeholder="" aria-label="선발 역할">
                 </div>
+
+                <!-- 제외할 학생 섹션 (CSV 사용자만 표시) -->
+                <div class="setting-group" id="optoutSection" style="display: none;">
+                    <button type="button" class="toggle-header" id="optoutToggle" aria-expanded="false">
+                        <h3>제외할 학생이 있나요?</h3>
+                        <span class="toggle-icon" aria-hidden="true">▼</span>
+                    </button>
+                    <div class="optout-container-inline" id="optoutContainer" style="display: none;">
+                        <!-- 학생 목록이 동적으로 추가됩니다 -->
+                    </div>
+                </div>
             </section>
             <div class="step-navigation">
                 <button class="nav-btn back-btn" id="step2Back" aria-label="이전 단계">
@@ -170,29 +177,10 @@
             </div>
         </div>
 
-        <!-- Step 3: Opt-out 학생 선택 -->
+        <!-- Step 3: 테마 선택 -->
         <div class="step-container" id="step3">
             <section class="section">
-                <h2 tabindex="-1" id="step3Title">제외할 학생 선택</h2>
-                <p class="section-description">선발에서 제외할 학생이 있다면 선택하세요</p>
-                <div class="optout-container" id="optoutContainer">
-                    <!-- 학생 목록이 동적으로 추가됩니다 -->
-                </div>
-            </section>
-            <div class="step-navigation">
-                <button class="nav-btn back-btn" id="step3Back" aria-label="이전 단계">
-                    <span>←</span> 이전
-                </button>
-                <button class="nav-btn next-btn" id="step3Next" aria-label="다음 단계">
-                    다음 <span>→</span>
-                </button>
-            </div>
-        </div>
-
-        <!-- Step 4: 테마 선택 -->
-        <div class="step-container" id="step4">
-            <section class="section">
-                <h2 tabindex="-1" id="step4Title">테마 선택</h2>
+                <h2 tabindex="-1" id="step3Title">테마 선택</h2>
                 <p class="section-description">선발 애니메이션 테마를 선택하세요</p>
                 <div class="theme-selector" role="radiogroup" aria-label="테마 선택">
                     <button type="button" class="theme-card" data-theme="roulette" role="radio" aria-checked="true">
@@ -213,7 +201,7 @@
                 </div>
             </section>
             <div class="step-navigation">
-                <button class="nav-btn back-btn" id="step4Back" aria-label="이전 단계">
+                <button class="nav-btn back-btn" id="step3Back" aria-label="이전 단계">
                     <span>←</span> 이전
                 </button>
                 <button class="nav-btn start-btn" id="startBtn" aria-label="선발 시작">

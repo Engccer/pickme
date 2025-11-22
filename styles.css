@@ -644,6 +644,75 @@ header p {
     border-radius: 8px;
 }
 
+/* 토글 헤더 (접기/펼치기) */
+.toggle-header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-radius: 8px;
+    font-family: inherit;
+}
+
+.toggle-header:hover {
+    background: var(--background);
+}
+
+.toggle-header:focus {
+    outline: 3px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+.toggle-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--text-primary);
+}
+
+.toggle-icon {
+    font-size: 1rem;
+    color: var(--text-secondary);
+    transition: transform 0.3s ease;
+}
+
+.toggle-header[aria-expanded="true"] .toggle-icon {
+    transform: rotate(180deg);
+}
+
+/* 인라인 Opt-out 컨테이너 (접기/펼치기) */
+.optout-container-inline {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 16px;
+    margin-top: 8px;
+    background: var(--background);
+    border-radius: 8px;
+    animation: expandDown 0.3s ease;
+}
+
+@keyframes expandDown {
+    from {
+        opacity: 0;
+        max-height: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+    to {
+        opacity: 1;
+        max-height: 400px;
+        padding-top: 16px;
+        padding-bottom: 16px;
+    }
+}
+
 .student-checkbox {
     display: flex;
     align-items: center;
@@ -1139,7 +1208,8 @@ input:focus,
         grid-template-columns: 1fr;
     }
 
-    .optout-container {
+    .optout-container,
+    .optout-container-inline {
         grid-template-columns: 1fr;
     }
 
