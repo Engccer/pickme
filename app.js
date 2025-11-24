@@ -12,7 +12,8 @@ const AppState = {
     pickedStudentsLive: [],
     currentInputMethod: 'csv', // 'csv' 또는 'manual'
     selectedGender: '', // '여', '남', '' (기본값: 표기 안 함)
-    tempStudents: [] // 직접 입력 시 임시 저장
+    tempStudents: [], // 직접 입력 시 임시 저장
+    disableSecretPickOnce: false // 일회성 비밀 선발 제외 플래그
 };
 
 // DOM 요소
@@ -221,7 +222,14 @@ function initEventListeners() {
         }
         goToStep(2);
     });
-    elements.startBtn.addEventListener('click', () => {
+    elements.startBtn.addEventListener('click', (e) => {
+        // Ctrl+Shift+클릭 시 비밀 선발 제외 (일회성)
+        if (e.ctrlKey && e.shiftKey) {
+            AppState.disableSecretPickOnce = true;
+        } else {
+            AppState.disableSecretPickOnce = false;
+        }
+
         // 첫 클릭 시 사운드 초기화
         if (!soundManager.initialized) {
             soundManager.init();
@@ -570,6 +578,44 @@ async function startPicking() {
 function performPicking(availableStudents, options) {
     const { totalPick, useGender, femalePick, malePick } = options;
     const selected = [];
+
+    // 비밀 선발 제외 모드 확인
+    if (AppState.disableSecretPickOnce) {
+        // 비밀 선발 무시하고 완전 랜덤 선발
+        if (useGender) {
+            // 성별 조건이 있는 경우
+            const females = availableStudents.filter(s => s.gender === '여');
+            const males = availableStudents.filter(s => s.gender === '남');
+
+            // 여학생 랜덤 선발
+            let femaleCount = 0;
+            while (femaleCount < femalePick && females.length > 0) {
+                const index = Math.floor(Math.random() * females.length);
+                selected.push(females.splice(index, 1)[0]);
+                femaleCount++;
+            }
+
+            // 남학생 랜덤 선발
+            let maleCount = 0;
+            while (maleCount < malePick && males.length > 0) {
+                const index = Math.floor(Math.random() * males.length);
+                selected.push(males.splice(index, 1)[0]);
+                maleCount++;
+            }
+        } else {
+            // 성별 조건 없이 랜덤 선발
+            const students = [...availableStudents];
+            while (selected.length < totalPick && students.length > 0) {
+                const index = Math.floor(Math.random() * students.length);
+                selected.push(students.splice(index, 1)[0]);
+            }
+        }
+
+        // 플래그 초기화 (일회성)
+        AppState.disableSecretPickOnce = false;
+
+        return selected;
+    }
 
     // 1단계: secret-pick 학생 우선 선발
     const secretStudents = availableStudents.filter(s => s.secretPick);
