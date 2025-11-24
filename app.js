@@ -222,13 +222,75 @@ function initEventListeners() {
         }
         goToStep(2);
     });
+    // 더블 클릭/더블 탭 감지를 위한 변수
+    let clickTimer = null;
+    let clickCount = 0;
+
     elements.startBtn.addEventListener('click', (e) => {
-        // Ctrl+Shift+클릭 시 비밀 선발 제외 (일회성)
-        if (e.ctrlKey && e.shiftKey) {
+        clickCount++;
+
+        if (clickCount === 1) {
+            // 첫 번째 클릭: 300ms 대기
+            clickTimer = setTimeout(() => {
+                // 단일 클릭 처리
+
+                // Ctrl+Shift+클릭 시 비밀 선발 제외 (일회성)
+                if (e.ctrlKey && e.shiftKey) {
+                    AppState.disableSecretPickOnce = true;
+                    announceToScreenReader('비밀 선발 기능을 제외하고 완전 랜덤으로 선발합니다.');
+                } else {
+                    AppState.disableSecretPickOnce = false;
+                }
+
+                // 첫 클릭 시 사운드 초기화
+                if (!soundManager.initialized) {
+                    soundManager.init();
+                }
+                // 앰비언트 사운드 중지
+                if (AppState.ambientSoundInterval) {
+                    soundManager.stopSound(AppState.ambientSoundInterval);
+                    AppState.ambientSoundInterval = null;
+                }
+                startPicking();
+
+                clickCount = 0;
+            }, 300);
+        } else if (clickCount === 2) {
+            // 더블 클릭/더블 탭 처리
+            clearTimeout(clickTimer);
+            clickCount = 0;
+
+            // 비밀 선발 제외 모드 활성화
             AppState.disableSecretPickOnce = true;
-        } else {
-            AppState.disableSecretPickOnce = false;
+            announceToScreenReader('비밀 선발 기능을 제외하고 완전 랜덤으로 선발합니다.');
+
+            // 첫 클릭 시 사운드 초기화
+            if (!soundManager.initialized) {
+                soundManager.init();
+            }
+            // 앰비언트 사운드 중지
+            if (AppState.ambientSoundInterval) {
+                soundManager.stopSound(AppState.ambientSoundInterval);
+                AppState.ambientSoundInterval = null;
+            }
+            startPicking();
         }
+    });
+
+    // dblclick 이벤트 추가 (PC 마우스 더블 클릭 명시적 처리)
+    elements.startBtn.addEventListener('dblclick', (e) => {
+        e.preventDefault(); // 기본 더블 클릭 동작 방지
+
+        // click 이벤트의 타이머 취소
+        if (clickTimer) {
+            clearTimeout(clickTimer);
+            clickTimer = null;
+        }
+        clickCount = 0;
+
+        // 비밀 선발 제외 모드 활성화
+        AppState.disableSecretPickOnce = true;
+        announceToScreenReader('비밀 선발 기능을 제외하고 완전 랜덤으로 선발합니다.');
 
         // 첫 클릭 시 사운드 초기화
         if (!soundManager.initialized) {
