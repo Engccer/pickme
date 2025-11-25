@@ -277,33 +277,6 @@ function initEventListeners() {
         }
     });
 
-    // dblclick 이벤트 추가 (PC 마우스 더블 클릭 명시적 처리)
-    elements.startBtn.addEventListener('dblclick', (e) => {
-        e.preventDefault(); // 기본 더블 클릭 동작 방지
-
-        // click 이벤트의 타이머 취소
-        if (clickTimer) {
-            clearTimeout(clickTimer);
-            clickTimer = null;
-        }
-        clickCount = 0;
-
-        // 비밀 선발 제외 모드 활성화
-        AppState.disableSecretPickOnce = true;
-        announceToScreenReader('비밀 선발 기능을 제외하고 완전 랜덤으로 선발합니다.');
-
-        // 첫 클릭 시 사운드 초기화
-        if (!soundManager.initialized) {
-            soundManager.init();
-        }
-        // 앰비언트 사운드 중지
-        if (AppState.ambientSoundInterval) {
-            soundManager.stopSound(AppState.ambientSoundInterval);
-            AppState.ambientSoundInterval = null;
-        }
-        startPicking();
-    });
-
     // 중지/재개
     elements.pauseBtn.addEventListener('click', pausePicking);
     elements.resumeBtn.addEventListener('click', resumePicking);
