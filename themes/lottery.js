@@ -292,6 +292,7 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
                         }, 3000);
                     } else {
                         pickingStartTime = currentTime;
+                        updateMessage(`${currentPickIndex + 1}/${selectedStudents.length} 선발 중...`);
                     }
                 }
             }
