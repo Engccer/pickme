@@ -13,7 +13,8 @@ const AppState = {
     currentInputMethod: 'csv', // 'csv' 또는 'manual'
     selectedGender: '', // '여', '남', '' (기본값: 표기 안 함)
     tempStudents: [], // 직접 입력 시 임시 저장
-    disableSecretPickOnce: false // 일회성 비밀 선발 제외 플래그
+    disableSecretPickOnce: false, // 일회성 비밀 선발 제외 플래그
+    detectedFormat: null // 감지된 CSV 형식: 'grid' 또는 'roster'
 };
 
 // DOM 요소
@@ -468,7 +469,8 @@ async function handleFileUpload(event) {
 
         parseCSV(text);
 
-        elements.fileInfo.textContent = `${file.name} (${AppState.students.length}명)`;
+        const formatLabel = AppState.detectedFormat === 'grid' ? '좌석 배치 형식 감지됨' : '명렬 형식 감지됨';
+        elements.fileInfo.textContent = `${file.name} — ${formatLabel} (${AppState.students.length}명)`;
         elements.fileInfo.style.color = 'var(--secondary-color)';
 
         // 파일 삭제 버튼 표시
@@ -483,7 +485,8 @@ async function handleFileUpload(event) {
         updateNextButtonLabel();
         elements.step1Next.disabled = false;
 
-        announceToScreenReader(`${AppState.students.length}명의 학생 명단이 로드되었습니다`);
+        const srFormatLabel = AppState.detectedFormat === 'grid' ? '좌석 배치' : '명렬';
+        announceToScreenReader(`${srFormatLabel} 형식 감지됨. ${AppState.students.length}명의 학생 명단이 로드되었습니다`);
 
     } catch (error) {
         elements.fileInfo.textContent = '파일 읽기 오류: ' + error.message;
@@ -491,8 +494,72 @@ async function handleFileUpload(event) {
     }
 }
 
-// CSV 파싱
+// CSV 형식 자동 감지: 'grid' (좌석 배치) 또는 'roster' (명렬)
+function detectFormat(text) {
+    const lines = text.trim().split('\n');
+    if (lines.length === 0) return 'roster';
+
+    const firstLine = lines[0];
+
+    // 첫 줄에 "분단"이 포함되어 있으면 grid
+    if (firstLine.includes('분단')) return 'grid';
+
+    // 첫 줄의 셀이 3개 이상이고, 두 번째 줄 이후에도 셀이 3개 이상인 줄이 과반이면 grid
+    const headerCols = firstLine.split(',').length;
+    if (headerCols >= 3) {
+        const dataLines = lines.slice(1).filter(l => l.trim());
+        if (dataLines.length >= 2) {
+            const multiColCount = dataLines.filter(l => l.split(',').length >= 3).length;
+            // 헤더가 "학년,반,번호,이름,성별" 패턴이면 roster
+            const rosterHeaders = ['학년', '반', '번호', '이름', '성별'];
+            const headers = firstLine.split(',').map(h => h.trim());
+            const isRosterHeader = rosterHeaders.every(rh => headers.includes(rh));
+            if (isRosterHeader) return 'roster';
+            if (multiColCount >= dataLines.length * 0.5) return 'grid';
+        }
+    }
+
+    return 'roster';
+}
+
+// Grid 형식 CSV 파싱 (좌석 배치: 1분단-좌,1분단-우,... 헤더 + 학생 이름)
+function parseGridCSV(text) {
+    const lines = text.trim().split('\n');
+    const headers = lines[0].split(',').map(h => h.trim());
+
+    AppState.students = [];
+    let number = 1;
+
+    for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(',').map(v => v.trim());
+        for (let j = 0; j < values.length; j++) {
+            const name = values[j].trim();
+            if (name && name !== '') {
+                AppState.students.push({
+                    grade: '-',
+                    class: '-',
+                    number: String(number),
+                    name: name,
+                    gender: '-',
+                    secretPick: false
+                });
+                number++;
+            }
+        }
+    }
+}
+
+// CSV 파싱 (자동 감지)
 function parseCSV(text) {
+    const format = detectFormat(text);
+    AppState.detectedFormat = format;
+
+    if (format === 'grid') {
+        parseGridCSV(text);
+        return;
+    }
+
+    // roster 형식
     const lines = text.trim().split('\n');
     const headers = lines[0].split(',').map(h => h.trim());
 
