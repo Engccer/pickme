@@ -444,55 +444,97 @@ function updateProgressBar(activeStep) {
     });
 }
 
-// CSV 파일 업로드 처리
+// 파일 업로드 처리 (CSV, TSV, TXT, MD, Excel, DOCX, HWPX, PDF)
 async function handleFileUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
 
+    // 원본 ArrayBuffer 보관 (시트 전환용)
+    AppState._lastFileBuffer = await file.arrayBuffer();
+    AppState._lastFileName = file.name;
+
     try {
-        // UTF-8 BOM 처리를 위해 ArrayBuffer로 읽기
-        const arrayBuffer = await file.arrayBuffer();
-        const uint8Array = new Uint8Array(arrayBuffer);
-
-        // UTF-8 BOM 제거 (EF BB BF)
-        let offset = 0;
-        if (uint8Array.length >= 3 &&
-            uint8Array[0] === 0xEF &&
-            uint8Array[1] === 0xBB &&
-            uint8Array[2] === 0xBF) {
-            offset = 3;
-        }
-
-        // UTF-8 디코딩
-        const decoder = new TextDecoder('utf-8');
-        const text = decoder.decode(uint8Array.slice(offset));
-
-        parseCSV(text);
-
-        const formatLabel = AppState.detectedFormat === 'grid' ? '좌석 배치 형식 감지됨' : '명렬 형식 감지됨';
-        elements.fileInfo.textContent = `${file.name} — ${formatLabel} (${AppState.students.length}명)`;
-        elements.fileInfo.style.color = 'var(--secondary-color)';
-
-        // 파일 삭제 버튼 표시
-        elements.fileDeleteBtn.style.display = 'inline-block';
-
-        // CSV 미리보기 렌더링
-        renderCsvPreview(AppState.students);
-
-        // UI 업데이트
-        elements.studentCount.style.display = 'block';
-        elements.totalStudents.textContent = AppState.students.length;
-        updateNextButtonLabel();
-        elements.step1Next.disabled = false;
-
-        const srFormatLabel = AppState.detectedFormat === 'grid' ? '좌석 배치' : '명렬';
-        announceToScreenReader(`${srFormatLabel} 형식 감지됨. ${AppState.students.length}명의 학생 명단이 로드되었습니다`);
-
+        const result = await window.FileParsers.parseFile(file);
+        applyFileParseResult(result, file.name);
     } catch (error) {
         elements.fileInfo.textContent = '파일 읽기 오류: ' + error.message;
         elements.fileInfo.style.color = 'var(--danger-color)';
     }
 }
+
+// 파싱 결과를 UI에 반영하는 공통 함수
+function applyFileParseResult(result, fileName) {
+    // 기존 경고/시트 선택 UI 제거
+    const existingWarning = document.querySelector('.file-warning');
+    if (existingWarning) existingWarning.remove();
+    const existingSheetSelector = document.querySelector('.sheet-selector');
+    if (existingSheetSelector) existingSheetSelector.remove();
+
+    const formatLabel = AppState.detectedFormat === 'grid' ? '좌석 배치 형식 감지됨' : '명렬 형식 감지됨';
+    elements.fileInfo.textContent = `${fileName} — ${formatLabel} (${AppState.students.length}명)`;
+    elements.fileInfo.style.color = 'var(--secondary-color)';
+
+    // 파일 삭제 버튼 표시
+    elements.fileDeleteBtn.style.display = 'inline-block';
+
+    // 시트 선택 UI 표시 (다중 시트 Excel)
+    if (result.sheetNames && result.sheetNames.length > 1) {
+        const selectorEl = document.createElement('div');
+        selectorEl.className = 'sheet-selector';
+        selectorEl.innerHTML = `
+            <label for="sheetSelect">시트 선택:</label>
+            <select id="sheetSelect" aria-label="Excel 시트 선택">
+                ${result.sheetNames.map(name =>
+                    `<option value="${name}" ${name === result.currentSheet ? 'selected' : ''}>${name}</option>`
+                ).join('')}
+            </select>
+        `;
+        elements.fileInfo.parentNode.insertBefore(selectorEl, elements.fileInfo.nextSibling);
+
+        document.getElementById('sheetSelect').addEventListener('change', (e) => {
+            try {
+                const newResult = window.FileParsers.parseExcelSheet(
+                    AppState._lastFileBuffer, e.target.value
+                );
+                newResult.sheetNames = result.sheetNames;
+                newResult.currentSheet = e.target.value;
+                applyFileParseResult(newResult, AppState._lastFileName);
+                announceToScreenReader(`시트 "${e.target.value}" 로드됨. ${AppState.students.length}명`);
+            } catch (err) {
+                elements.fileInfo.textContent = '시트 읽기 오류: ' + err.message;
+                elements.fileInfo.style.color = 'var(--danger-color)';
+            }
+        });
+    }
+
+    // 경고 메시지 표시 (문서 형식일 때)
+    if (result.warning) {
+        const warningEl = document.createElement('div');
+        warningEl.className = 'file-warning';
+        warningEl.setAttribute('role', 'alert');
+        warningEl.textContent = result.warning;
+        // 시트 선택 UI 뒤, 또는 fileInfo 뒤에 삽입
+        const insertAfter = document.querySelector('.sheet-selector') || elements.fileInfo;
+        insertAfter.parentNode.insertBefore(warningEl, insertAfter.nextSibling);
+    }
+
+    // CSV 미리보기 렌더링
+    renderCsvPreview(AppState.students);
+
+    // UI 업데이트
+    elements.studentCount.style.display = 'block';
+    elements.totalStudents.textContent = AppState.students.length;
+    updateNextButtonLabel();
+    elements.step1Next.disabled = false;
+
+    const srFormatLabel = AppState.detectedFormat === 'grid' ? '좌석 배치' : '명렬';
+    announceToScreenReader(`${srFormatLabel} 형식 감지됨. ${AppState.students.length}명의 학생 명단이 로드되었습니다`);
+}
+
+// window에 노출 (file-parsers.js에서 호출 가능하도록)
+window.parseCSV = parseCSV;
+window.detectFormat = detectFormat;
+window.parseGridCSV = parseGridCSV;
 
 // CSV 형식 자동 감지: 'grid' (좌석 배치) 또는 'roster' (명렬)
 function detectFormat(text) {
