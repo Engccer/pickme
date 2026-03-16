@@ -10,11 +10,14 @@ const AppState = {
     ambientSoundInterval: null,
     bgMusicInterval: null,
     pickedStudentsLive: [],
-    currentInputMethod: 'csv', // 'csv' 또는 'manual'
+    currentInputMethod: 'csv', // 'csv', 'manual', 또는 'recent'
     selectedGender: '', // '여', '남', '' (기본값: 표기 안 함)
     tempStudents: [], // 직접 입력 시 임시 저장
     disableSecretPickOnce: false, // 일회성 비밀 선발 제외 플래그
-    detectedFormat: null // 감지된 CSV 형식: 'grid' 또는 'roster'
+    detectedFormat: null, // 감지된 CSV 형식: 'grid' 또는 'roster'
+    _lastFileBuffer: null, // 파일 업로드 시 원본 ArrayBuffer (시트 전환용)
+    _lastFileName: null, // 마지막 업로드 파일명
+    _loadedRecentClassId: null // 현재 불러온 최근 학급 ID
 };
 
 // DOM 요소
@@ -35,6 +38,14 @@ const elements = {
     manualTab: null,
     csvPanel: null,
     manualPanel: null,
+    // Step 1 - 최근 학급
+    recentTab: null,
+    recentPanel: null,
+    recentClassesList: null,
+    recentEmptyMsg: null,
+    recentPreviewSection: null,
+    recentPreviewCount: null,
+    recentPreviewList: null,
     // Step 1 - CSV 업로드
     fileDeleteBtn: null,
     csvPreviewSection: null,
@@ -117,6 +128,13 @@ function initElements() {
     elements.manualTab = document.getElementById('manualTab');
     elements.csvPanel = document.getElementById('csvPanel');
     elements.manualPanel = document.getElementById('manualPanel');
+    elements.recentTab = document.getElementById('recentTab');
+    elements.recentPanel = document.getElementById('recentPanel');
+    elements.recentClassesList = document.getElementById('recentClassesList');
+    elements.recentEmptyMsg = document.getElementById('recentEmptyMsg');
+    elements.recentPreviewSection = document.getElementById('recentPreviewSection');
+    elements.recentPreviewCount = document.getElementById('recentPreviewCount');
+    elements.recentPreviewList = document.getElementById('recentPreviewList');
     // Step 1 - CSV 업로드
     elements.fileDeleteBtn = document.getElementById('fileDeleteBtn');
     elements.csvPreviewSection = document.getElementById('csvPreviewSection');
@@ -178,6 +196,7 @@ function initEventListeners() {
     // Step 1: 탭 전환
     elements.csvTab.addEventListener('click', () => switchInputTab('csv'));
     elements.manualTab.addEventListener('click', () => switchInputTab('manual'));
+    elements.recentTab.addEventListener('click', () => switchInputTab('recent'));
 
     // Step 1: CSV 파일 업로드
     elements.fileSelectBtn.addEventListener('click', () => {
@@ -390,6 +409,9 @@ function goToStep(stepNumber) {
 
             announceToScreenReader(`${AppState.students.length}명의 학생이 입력되었습니다`);
         }
+
+        // 최근 학급으로 저장
+        saveRecentClass();
     }
 
     // 애니메이션 방향 결정
@@ -1110,26 +1132,205 @@ function announceToScreenReader(message) {
 function switchInputTab(method) {
     AppState.currentInputMethod = method;
 
-    // 탭 버튼 상태 업데이트
-    if (method === 'csv') {
-        elements.csvTab.classList.add('active');
-        elements.manualTab.classList.remove('active');
-        elements.csvTab.setAttribute('aria-selected', 'true');
-        elements.manualTab.setAttribute('aria-selected', 'false');
+    const tabs = [
+        { key: 'csv', tab: elements.csvTab, panel: elements.csvPanel },
+        { key: 'manual', tab: elements.manualTab, panel: elements.manualPanel },
+        { key: 'recent', tab: elements.recentTab, panel: elements.recentPanel }
+    ];
 
-        // 패널 전환
-        elements.csvPanel.classList.add('active');
-        elements.manualPanel.classList.remove('active');
-    } else {
-        elements.manualTab.classList.add('active');
-        elements.csvTab.classList.remove('active');
-        elements.manualTab.setAttribute('aria-selected', 'true');
-        elements.csvTab.setAttribute('aria-selected', 'false');
+    tabs.forEach(({ key, tab, panel }) => {
+        const isActive = key === method;
+        tab.classList.toggle('active', isActive);
+        tab.setAttribute('aria-selected', String(isActive));
+        panel.classList.toggle('active', isActive);
+    });
 
-        // 패널 전환
-        elements.manualPanel.classList.add('active');
-        elements.csvPanel.classList.remove('active');
+    // 탭 전환 시 최근 학급 미리보기 초기화
+    if (method !== 'recent') {
+        elements.recentPreviewSection.style.display = 'none';
     }
+
+    if (method === 'recent') {
+        renderRecentClasses();
+    }
+}
+
+// ===== 최근 학급 기능 =====
+
+const RECENT_CLASSES_KEY = 'pickme-recent-classes';
+const MAX_RECENT_CLASSES = 20;
+
+function loadRecentClasses() {
+    try {
+        return JSON.parse(localStorage.getItem(RECENT_CLASSES_KEY)) || [];
+    } catch {
+        return [];
+    }
+}
+
+function saveRecentClass() {
+    if (!AppState.students || AppState.students.length === 0) return;
+
+    const classes = loadRecentClasses();
+    const names = AppState.students.map(s => s.name).sort().join(',');
+
+    // 중복 확인: 같은 학생 구성이면 timestamp만 갱신
+    const existingIdx = classes.findIndex(c => {
+        const existingNames = c.students.map(s => s.name).sort().join(',');
+        return existingNames === names;
+    });
+
+    if (existingIdx !== -1) {
+        classes[existingIdx].timestamp = Date.now();
+        classes[existingIdx].label = generateRecentLabel();
+    } else {
+        classes.unshift({
+            id: String(Date.now()),
+            label: generateRecentLabel(),
+            inputMethod: AppState.currentInputMethod,
+            students: AppState.students,
+            timestamp: Date.now()
+        });
+    }
+
+    // 최신 순 정렬 후 최대 개수 유지
+    classes.sort((a, b) => b.timestamp - a.timestamp);
+    if (classes.length > MAX_RECENT_CLASSES) {
+        classes.length = MAX_RECENT_CLASSES;
+    }
+
+    try {
+        localStorage.setItem(RECENT_CLASSES_KEY, JSON.stringify(classes));
+    } catch (e) {
+        console.warn('최근 학급 저장 실패:', e);
+    }
+}
+
+function generateRecentLabel() {
+    if (AppState._lastFileName && AppState.currentInputMethod !== 'manual') {
+        return AppState._lastFileName;
+    }
+    const names = AppState.students.slice(0, 3).map(s => s.name);
+    const suffix = AppState.students.length > 3 ? ` 외 ${AppState.students.length - 3}명` : '';
+    return names.join(', ') + suffix;
+}
+
+function renderRecentClasses() {
+    const classes = loadRecentClasses();
+    const container = elements.recentClassesList;
+
+    if (classes.length === 0) {
+        container.innerHTML = '<p class="recent-empty-message">최근 사용한 학급이 없습니다</p>';
+        return;
+    }
+
+    container.innerHTML = classes.map(c => {
+        const date = new Date(c.timestamp);
+        const dateStr = `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
+        return `
+            <div class="recent-class-card" data-id="${escapeHtml(c.id)}">
+                <div class="recent-class-info">
+                    <div class="recent-class-label">${escapeHtml(c.label)}</div>
+                    <div class="recent-class-meta">${c.students.length}명 · ${dateStr}</div>
+                </div>
+                <div class="recent-class-actions">
+                    <button class="recent-load-btn" aria-label="${escapeHtml(c.label)} 불러오기">불러오기</button>
+                    <button class="recent-delete-btn" aria-label="${escapeHtml(c.label)} 삭제">삭제</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // 이벤트 위임 (inline onclick 대신)
+    container.onclick = (e) => {
+        const card = e.target.closest('.recent-class-card');
+        if (!card) return;
+        const id = card.dataset.id;
+        if (e.target.closest('.recent-load-btn')) loadRecentClass(id);
+        if (e.target.closest('.recent-delete-btn')) deleteRecentClass(id);
+    };
+}
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+function loadRecentClass(id) {
+    const classes = loadRecentClasses();
+    const found = classes.find(c => c.id === id);
+    if (!found) return;
+
+    AppState.students = found.students;
+    AppState.currentInputMethod = 'recent';
+    AppState._loadedRecentClassId = id;
+
+    // 최근 학급 패널 내 미리보기 렌더링
+    renderRecentPreview(AppState.students);
+
+    // UI 업데이트
+    elements.studentCount.style.display = 'block';
+    elements.totalStudents.textContent = AppState.students.length;
+    elements.step1Next.disabled = false;
+
+    announceToScreenReader(`${found.label} 불러옴. ${AppState.students.length}명`);
+}
+
+function renderRecentPreview(students) {
+    elements.recentPreviewList.innerHTML = '';
+    elements.recentPreviewCount.textContent = students.length;
+    elements.recentPreviewSection.style.display = 'block';
+
+    students.forEach(student => {
+        const div = document.createElement('div');
+        div.className = 'preview-item';
+
+        const info = document.createElement('div');
+        info.className = 'preview-info';
+
+        const nameLine = document.createElement('div');
+        nameLine.className = 'preview-name';
+        nameLine.textContent = student.name;
+        info.appendChild(nameLine);
+
+        const details = [];
+        if (student.grade !== '-') details.push(`${student.grade}학년`);
+        if (student.class !== '-') details.push(`${student.class}반`);
+        if (student.number !== '-') details.push(`${student.number}번`);
+        if (student.gender !== '-') details.push(student.gender);
+
+        if (details.length > 0) {
+            const detailLine = document.createElement('div');
+            detailLine.className = 'preview-details-editable';
+            detailLine.textContent = details.join(' ');
+            info.appendChild(detailLine);
+        }
+
+        div.appendChild(info);
+        elements.recentPreviewList.appendChild(div);
+    });
+}
+
+function deleteRecentClass(id) {
+    const classes = loadRecentClasses().filter(c => c.id !== id);
+    try {
+        localStorage.setItem(RECENT_CLASSES_KEY, JSON.stringify(classes));
+    } catch (e) {
+        console.warn('최근 학급 삭제 저장 실패:', e);
+    }
+    renderRecentClasses();
+
+    // 삭제된 학급이 현재 로드된 것이면 상태 초기화
+    if (AppState._loadedRecentClassId === id) {
+        AppState.students = [];
+        AppState._loadedRecentClassId = null;
+        elements.studentCount.style.display = 'none';
+        elements.recentPreviewSection.style.display = 'none';
+        elements.step1Next.disabled = true;
+    }
+
+    announceToScreenReader('학급이 삭제되었습니다');
 }
 
 // 성별 토글 처리

@@ -470,6 +470,97 @@ header .usage-guide-link:focus {
     display: block;
 }
 
+/* 최근 학급 UI */
+.recent-classes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.recent-empty-message {
+    text-align: center;
+    color: var(--text-secondary);
+    padding: 32px 16px;
+    font-size: 1rem;
+}
+
+.recent-class-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    background: var(--surface);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.recent-class-card:hover {
+    border-color: var(--primary-color);
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
+}
+
+.recent-class-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.recent-class-label {
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.recent-class-meta {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+.recent-class-actions {
+    display: flex;
+    gap: 8px;
+    margin-left: 12px;
+    flex-shrink: 0;
+}
+
+.recent-load-btn {
+    padding: 8px 16px;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    font-family: inherit;
+}
+
+.recent-load-btn:hover {
+    background: var(--primary-hover);
+}
+
+.recent-delete-btn {
+    padding: 8px 12px;
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.recent-delete-btn:hover {
+    color: var(--danger-color);
+    border-color: var(--danger-color);
+}
+
 /* 직접 입력 UI */
 .manual-input-section {
     margin-bottom: 24px;

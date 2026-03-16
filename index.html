@@ -54,6 +54,9 @@
                     <button class="tab-btn" id="manualTab" role="tab" aria-selected="false" aria-controls="manualPanel">
                         직접 입력
                     </button>
+                    <button class="tab-btn" id="recentTab" role="tab" aria-selected="false" aria-controls="recentPanel">
+                        최근 학급
+                    </button>
                 </div>
 
                 <!-- CSV 파일 패널 -->
@@ -128,6 +131,17 @@
                         <div class="preview-list" id="previewList">
                             <!-- 동적으로 추가됨 -->
                         </div>
+                    </div>
+                </div>
+
+                <!-- 최근 학급 패널 -->
+                <div class="tab-panel" id="recentPanel" role="tabpanel" aria-labelledby="recentTab">
+                    <div id="recentClassesList" class="recent-classes-list">
+                        <p class="recent-empty-message" id="recentEmptyMsg">최근 사용한 학급이 없습니다</p>
+                    </div>
+                    <div class="manual-input-section" id="recentPreviewSection" style="display: none;">
+                        <h3>미리보기 (<span id="recentPreviewCount">0</span>명)</h3>
+                        <div class="preview-list" id="recentPreviewList"></div>
                     </div>
                 </div>
 
