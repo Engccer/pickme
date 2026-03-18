@@ -1,3 +1,8 @@
+// 학생 고유 키 생성 (연속 선발 시 중복 판별용)
+function studentKey(s) {
+    return studentKey(s);
+}
+
 // 전역 상태
 const AppState = {
     students: [],
@@ -711,16 +716,26 @@ async function startPicking() {
     }
 
     // 선발 가능한 학생 필터링 (제외 + 이전 라운드에서 선발된 학생 제외)
-    const pickedNames = new Set(AppState.allPickedStudents.map(s => `${s.name}_${s.number}_${s.grade}_${s.class}`));
+    const pickedNames = new Set(AppState.allPickedStudents.map(s => studentKey(s)));
     const availableStudents = AppState.students.filter((student, index) =>
         !AppState.excludedStudents.has(index) &&
-        !pickedNames.has(`${student.name}_${student.number}_${student.grade}_${student.class}`)
+        !pickedNames.has(studentKey(student))
     );
 
     if (availableStudents.length < totalPick) {
         const remaining = availableStudents.length;
         alert(`선발 가능한 학생 수가 부족합니다. (남은 인원: ${remaining}명)`);
         return;
+    }
+
+    // 성별 조건 시 남은 성별별 인원 검증
+    if (useGender) {
+        const availFemales = availableStudents.filter(s => s.gender === '여').length;
+        const availMales = availableStudents.filter(s => s.gender === '남').length;
+        if (availFemales < femalePick || availMales < malePick) {
+            alert(`성별 조건을 만족할 수 없습니다. (남은 여학생: ${availFemales}명, 남학생: ${availMales}명)`);
+            return;
+        }
     }
 
     // 선발 로직 실행
@@ -1026,7 +1041,8 @@ function displayResults() {
     });
 
     // 이전 라운드 누적 결과가 있으면 표시
-    const previousPicked = AppState.allPickedStudents.filter(s => !AppState.pickResults.includes(s));
+    const currentKeys = new Set(AppState.pickResults.map(studentKey));
+    const previousPicked = AppState.allPickedStudents.filter(s => !currentKeys.has(studentKey(s)));
     if (previousPicked.length > 0) {
         const separator = document.createElement('div');
         separator.className = 'result-previous-section';
@@ -1048,10 +1064,10 @@ function displayResults() {
     }
 
     // "계속 선발하기" 버튼 활성화 여부 (남은 학생이 있을 때만)
-    const pickedNames = new Set(AppState.allPickedStudents.map(s => `${s.name}_${s.number}_${s.grade}_${s.class}`));
+    const pickedNames = new Set(AppState.allPickedStudents.map(s => studentKey(s)));
     const remainingCount = AppState.students.filter((s, i) =>
         !AppState.excludedStudents.has(i) &&
-        !pickedNames.has(`${s.name}_${s.number}_${s.grade}_${s.class}`)
+        !pickedNames.has(studentKey(s))
     ).length;
     elements.continuePickBtn.disabled = remainingCount === 0;
     elements.continuePickBtn.title = remainingCount > 0
@@ -1089,7 +1105,8 @@ function saveResults() {
     });
 
     // 이전 라운드 결과
-    const previousPicked = AppState.allPickedStudents.filter(s => !AppState.pickResults.includes(s));
+    const currentKeys = new Set(AppState.pickResults.map(studentKey));
+    const previousPicked = AppState.allPickedStudents.filter(s => !currentKeys.has(studentKey(s)));
     if (previousPicked.length > 0) {
         content += `\n[이전 선발 - ${previousPicked.length}명]\n`;
         previousPicked.forEach((student, index) => {
@@ -1138,10 +1155,10 @@ function continuePicking() {
     elements.pickedStudentsLiveEl.innerHTML = '';
 
     // 남은 학생 수 계산하여 안내
-    const pickedNames = new Set(AppState.allPickedStudents.map(s => `${s.name}_${s.number}_${s.grade}_${s.class}`));
+    const pickedNames = new Set(AppState.allPickedStudents.map(s => studentKey(s)));
     const remainingCount = AppState.students.filter((s, i) =>
         !AppState.excludedStudents.has(i) &&
-        !pickedNames.has(`${s.name}_${s.number}_${s.grade}_${s.class}`)
+        !pickedNames.has(studentKey(s))
     ).length;
 
     announceToScreenReader(`남은 학생 ${remainingCount}명으로 추가 선발을 진행합니다`);
