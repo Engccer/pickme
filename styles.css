@@ -1313,6 +1313,32 @@ header .usage-guide-link:focus {
     transform: translateY(-2px);
 }
 
+#continuePickBtn {
+    background: var(--primary-color);
+    color: white;
+}
+
+#continuePickBtn:hover:not(:disabled) {
+    background: #4338ca;
+    transform: translateY(-2px);
+}
+
+#continuePickBtn:disabled {
+    background: #a5b4fc;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+#resetSettingsBtn {
+    background: #f59e0b;
+    color: white;
+}
+
+#resetSettingsBtn:hover {
+    background: #d97706;
+    transform: translateY(-2px);
+}
+
 #resetBtn {
     background: var(--text-secondary);
     color: white;
@@ -1321,6 +1347,23 @@ header .usage-guide-link:focus {
 #resetBtn:hover {
     background: var(--text-primary);
     transform: translateY(-2px);
+}
+
+/* 이전 선발 결과 */
+.result-previous-section {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 2px dashed var(--border-color);
+}
+
+.result-previous-title {
+    font-size: 1rem;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+}
+
+.result-item-previous {
+    opacity: 0.6;
 }
 
 /* 피드백 섹션 */

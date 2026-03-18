@@ -38,7 +38,10 @@ python -m http.server 8000
 2. Step 1: 파일 업로드(`FileParsers.parseFile`) / 직접 입력(`handleManualInput`) / 최근 학급(`loadRecentClass`) → `AppState.students[]`
 3. Step 2: 인원/성별/역할 설정 → `validateStep2()`
 4. Step 3: 테마 선택 → `startPicking()` → `performPicking()` (선발 알고리즘) → `runThemeAnimation()` (Three.js)
-5. 결과: `displayResults()` → `saveResults()` (텍스트 파일 다운로드)
+5. 결과: `displayResults()` → 3가지 후속 동작 선택
+   - `continuePicking()`: 선발된 인원 제외, 테마 선택(Step 3)으로 복귀하여 추가 선발
+   - `resetSettings()`: 누적 선발 초기화, 명단 유지한 채 조건 설정(Step 2)으로 복귀
+   - `resetApp()`: 전체 초기화, 첫 화면(Step 1)으로 복귀
 
 ### 주요 설계 포인트
 
@@ -49,6 +52,7 @@ python -m http.server 8000
 - **비밀 선발**: CSV의 `비밀선발` 열이 1인 학생 우선 선발. Ctrl+Shift+클릭 또는 더블클릭으로 일회성 제외 가능 (`disableSecretPickOnce`)
 - **동명이인 처리**: `getDisplayName()`이 번호/반/학년 정보를 자동 부가
 - **테마 인터페이스**: 각 테마 함수는 `(canvas, selectedStudents, addPickedStudent)` 시그니처. `addPickedStudent` 콜백으로 선발 결과를 실시간 UI에 반영
+- **연속 선발**: `AppState.allPickedStudents[]`에 라운드별 선발 결과 누적. `startPicking()`이 누적 목록과 `name+number+grade+class` 키로 비교하여 이미 뽑힌 학생 자동 제외. 결과 화면에서 이번/이전 라운드 구분 표시
 - **일시정지**: `AppState.isPaused` / `AppState.shouldStop` 플래그로 애니메이션 루프 제어
 - **접근성**: ARIA 레이블, `aria-live` 영역, `announceToScreenReader()` 함수로 스크린 리더 지원. 키보드 네비게이션 지원
 

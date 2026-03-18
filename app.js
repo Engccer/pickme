@@ -4,6 +4,7 @@ const AppState = {
     excludedStudents: new Set(),
     selectedTheme: 'roulette',
     pickResults: [],
+    allPickedStudents: [], // 연속 선발 시 누적된 전체 선발 결과
     currentStep: 1,
     isPaused: false,
     shouldStop: false,
@@ -96,6 +97,8 @@ const elements = {
     congratulationsMessage: null,
     resultContainer: null,
     saveResultBtn: null,
+    continuePickBtn: null,
+    resetSettingsBtn: null,
     resetBtn: null,
 
     // 스크린 리더
@@ -185,6 +188,8 @@ function initElements() {
     elements.congratulationsMessage = document.getElementById('congratulationsMessage');
     elements.resultContainer = document.getElementById('resultContainer');
     elements.saveResultBtn = document.getElementById('saveResultBtn');
+    elements.continuePickBtn = document.getElementById('continuePickBtn');
+    elements.resetSettingsBtn = document.getElementById('resetSettingsBtn');
     elements.resetBtn = document.getElementById('resetBtn');
 
     // 스크린 리더
@@ -322,6 +327,8 @@ function initEventListeners() {
 
     // 결과 버튼
     elements.saveResultBtn.addEventListener('click', saveResults);
+    elements.continuePickBtn.addEventListener('click', continuePicking);
+    elements.resetSettingsBtn.addEventListener('click', resetSettings);
     elements.resetBtn.addEventListener('click', resetApp);
 
     // 키보드 단축키
@@ -703,13 +710,16 @@ async function startPicking() {
         }
     }
 
-    // 선발 가능한 학생 필터링
+    // 선발 가능한 학생 필터링 (제외 + 이전 라운드에서 선발된 학생 제외)
+    const pickedNames = new Set(AppState.allPickedStudents.map(s => `${s.name}_${s.number}_${s.grade}_${s.class}`));
     const availableStudents = AppState.students.filter((student, index) =>
-        !AppState.excludedStudents.has(index)
+        !AppState.excludedStudents.has(index) &&
+        !pickedNames.has(`${student.name}_${student.number}_${student.grade}_${student.class}`)
     );
 
     if (availableStudents.length < totalPick) {
-        alert('선발 가능한 학생 수가 부족합니다.');
+        const remaining = availableStudents.length;
+        alert(`선발 가능한 학생 수가 부족합니다. (남은 인원: ${remaining}명)`);
         return;
     }
 
@@ -725,6 +735,9 @@ async function startPicking() {
         alert('선발 조건을 만족하는 학생이 없습니다.');
         return;
     }
+
+    // 누적 선발 목록에 추가
+    AppState.allPickedStudents.push(...AppState.pickResults);
 
     // 초기화
     AppState.isPaused = false;
@@ -997,6 +1010,7 @@ function displayResults() {
 
     elements.resultContainer.innerHTML = '';
 
+    // 이번 라운드 결과 표시
     AppState.pickResults.forEach((student, index) => {
         const displayName = getDisplayName(student, AppState.pickResults);
 
@@ -1010,6 +1024,39 @@ function displayResults() {
         `;
         elements.resultContainer.appendChild(div);
     });
+
+    // 이전 라운드 누적 결과가 있으면 표시
+    const previousPicked = AppState.allPickedStudents.filter(s => !AppState.pickResults.includes(s));
+    if (previousPicked.length > 0) {
+        const separator = document.createElement('div');
+        separator.className = 'result-previous-section';
+        separator.innerHTML = `<h3 class="result-previous-title">이전 선발 결과 (${previousPicked.length}명)</h3>`;
+        elements.resultContainer.appendChild(separator);
+
+        previousPicked.forEach((student, index) => {
+            const displayName = getDisplayName(student, previousPicked);
+            const div = document.createElement('div');
+            div.className = 'result-item result-item-previous';
+            div.innerHTML = `
+                <span class="result-number">${index + 1}</span>
+                <div style="display: inline-block;">
+                    <div class="result-name">${displayName}</div>
+                </div>
+            `;
+            elements.resultContainer.appendChild(div);
+        });
+    }
+
+    // "계속 선발하기" 버튼 활성화 여부 (남은 학생이 있을 때만)
+    const pickedNames = new Set(AppState.allPickedStudents.map(s => `${s.name}_${s.number}_${s.grade}_${s.class}`));
+    const remainingCount = AppState.students.filter((s, i) =>
+        !AppState.excludedStudents.has(i) &&
+        !pickedNames.has(`${s.name}_${s.number}_${s.grade}_${s.class}`)
+    ).length;
+    elements.continuePickBtn.disabled = remainingCount === 0;
+    elements.continuePickBtn.title = remainingCount > 0
+        ? `남은 학생 ${remainingCount}명으로 추가 선발`
+        : '선발 가능한 학생이 없습니다';
 
     // 결과 화면 표시
     elements.steps[3].style.display = 'none';
@@ -1032,12 +1079,24 @@ function saveResults() {
 
     let content = `=== ${purpose} 결과 ===\n`;
     content += `날짜: ${timestamp}\n`;
-    content += `총 ${AppState.pickResults.length}명 선발\n\n`;
+    content += `총 ${AppState.allPickedStudents.length}명 선발\n\n`;
 
+    // 이번 라운드 결과
+    content += `[이번 선발 - ${AppState.pickResults.length}명]\n`;
     AppState.pickResults.forEach((student, index) => {
         const displayName = getDisplayName(student, AppState.pickResults);
         content += `${index + 1}. ${displayName}\n`;
     });
+
+    // 이전 라운드 결과
+    const previousPicked = AppState.allPickedStudents.filter(s => !AppState.pickResults.includes(s));
+    if (previousPicked.length > 0) {
+        content += `\n[이전 선발 - ${previousPicked.length}명]\n`;
+        previousPicked.forEach((student, index) => {
+            const displayName = getDisplayName(student, previousPicked);
+            content += `${index + 1}. ${displayName}\n`;
+        });
+    }
 
     // 파일명 생성 (yymmdd_hhmmss_선발결과.txt)
     const now = new Date();
@@ -1059,10 +1118,102 @@ function saveResults() {
     URL.revokeObjectURL(url);
 }
 
+// 계속 선발하기: 선발된 인원은 제외하고 테마 선택 화면으로 이동
+function continuePicking() {
+    // 이번 라운드 결과는 유지 (allPickedStudents에 이미 누적됨)
+    AppState.pickResults = [];
+    AppState.isPaused = false;
+    AppState.shouldStop = false;
+    AppState.pickedStudentsLive = [];
+
+    // 사운드 정리
+    if (AppState.bgMusicInterval) {
+        soundManager.stopSound(AppState.bgMusicInterval);
+        AppState.bgMusicInterval = null;
+    }
+
+    // 결과 화면 숨기고 Step 3 (테마 선택)으로 이동
+    elements.resultSection.style.display = 'none';
+    elements.animationContainer.classList.remove('fullscreen-animation');
+    elements.pickedStudentsLiveEl.innerHTML = '';
+
+    // 남은 학생 수 계산하여 안내
+    const pickedNames = new Set(AppState.allPickedStudents.map(s => `${s.name}_${s.number}_${s.grade}_${s.class}`));
+    const remainingCount = AppState.students.filter((s, i) =>
+        !AppState.excludedStudents.has(i) &&
+        !pickedNames.has(`${s.name}_${s.number}_${s.grade}_${s.class}`)
+    ).length;
+
+    announceToScreenReader(`남은 학생 ${remainingCount}명으로 추가 선발을 진행합니다`);
+
+    // Step 3 표시
+    AppState.currentStep = 3;
+    elements.steps[3].style.display = 'block';
+    elements.steps[3].classList.add('active');
+    updateProgressBar(3);
+
+    // 앰비언트 사운드 재개
+    if (!AppState.ambientSoundInterval) {
+        AppState.ambientSoundInterval = soundManager.playAmbientSound();
+    }
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const step3Title = document.getElementById('step3Title');
+    if (step3Title) step3Title.focus();
+}
+
+// 다시 설정하고 선발: 명단 유지, 누적 선발 초기화, Step 2로 이동
+function resetSettings() {
+    // 누적 선발 결과 초기화 (전체 명단 대상으로 다시 시작)
+    AppState.allPickedStudents = [];
+    AppState.pickResults = [];
+    AppState.isPaused = false;
+    AppState.shouldStop = false;
+    AppState.pickedStudentsLive = [];
+
+    // 사운드 정리
+    if (AppState.ambientSoundInterval) {
+        soundManager.stopSound(AppState.ambientSoundInterval);
+        AppState.ambientSoundInterval = null;
+    }
+    if (AppState.bgMusicInterval) {
+        soundManager.stopSound(AppState.bgMusicInterval);
+        AppState.bgMusicInterval = null;
+    }
+
+    // UI 초기화
+    elements.resultSection.style.display = 'none';
+    elements.animationContainer.classList.remove('fullscreen-animation');
+    elements.pickedStudentsLiveEl.innerHTML = '';
+    if (elements.srAnnounce) elements.srAnnounce.textContent = '';
+
+    // Step 2 입력값 초기화
+    elements.totalPick.value = '';
+    elements.useGenderFilter.checked = false;
+    elements.genderSettings.style.display = 'none';
+    elements.femalePick.value = '';
+    elements.malePick.value = '';
+    elements.purpose.value = '';
+    elements.step2Next.disabled = true;
+
+    announceToScreenReader('명단을 유지한 채 조건 설정 화면으로 돌아갑니다');
+
+    // Step 2 표시
+    AppState.currentStep = 2;
+    elements.steps[2].style.display = 'block';
+    elements.steps[2].classList.add('active');
+    updateProgressBar(2);
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const step2Title = document.getElementById('step2Title');
+    if (step2Title) step2Title.focus();
+}
+
 // 앱 초기화
 function resetApp() {
     // 상태 초기화
     AppState.pickResults = [];
+    AppState.allPickedStudents = [];
     AppState.excludedStudents.clear();
     AppState.currentStep = 1;
     AppState.isPaused = false;
