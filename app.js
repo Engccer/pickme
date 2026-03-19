@@ -1,6 +1,6 @@
 // 학생 고유 키 생성 (연속 선발 시 중복 판별용)
 function studentKey(s) {
-    return studentKey(s);
+    return `${s.name}_${s.number}_${s.grade}_${s.class}`;
 }
 
 // 전역 상태
@@ -1350,7 +1350,10 @@ function saveRecentClass() {
 
     if (existingIdx !== -1) {
         classes[existingIdx].timestamp = Date.now();
-        classes[existingIdx].label = generateRecentLabel();
+        // 파일명 라벨이 있으면 보존 (최근 학급에서 불러온 경우 _lastFileName이 없으므로)
+        if (AppState._lastFileName && AppState.currentInputMethod !== 'manual') {
+            classes[existingIdx].label = AppState._lastFileName;
+        }
     } else {
         classes.unshift({
             id: String(Date.now()),
