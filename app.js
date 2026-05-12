@@ -1448,39 +1448,167 @@ function loadRecentClass(id) {
     announceToScreenReader(`${found.label} 불러옴. ${AppState.students.length}명`);
 }
 
-function renderRecentPreview(students) {
-    elements.recentPreviewList.innerHTML = '';
-    elements.recentPreviewCount.textContent = students.length;
-    elements.recentPreviewSection.style.display = 'block';
+// 공통 편집 가능 미리보기 헬퍼
+// 세 입력 경로(직접 입력 / 파일 업로드 / 최근 학급)가 모두 이 함수를 호출한다.
+// 이름·번호·성별 편집 + 삭제를 일관되게 제공하며, store 갱신은 onUpdate/onDelete 콜백에 위임한다.
+function renderEditablePreview({ containerEl, countEl, sectionEl, students, onUpdate, onDelete }) {
+    containerEl.innerHTML = '';
+    countEl.textContent = students.length;
+    sectionEl.style.display = students.length > 0 ? 'block' : 'none';
 
-    students.forEach(student => {
+    students.forEach((student, index) => {
         const div = document.createElement('div');
         div.className = 'preview-item';
 
         const info = document.createElement('div');
         info.className = 'preview-info';
 
-        const nameLine = document.createElement('div');
-        nameLine.className = 'preview-name';
-        nameLine.textContent = student.name;
-        info.appendChild(nameLine);
+        // 이름 (편집 가능)
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.className = 'preview-name-input';
+        nameInput.value = student.name;
+        nameInput.setAttribute('aria-label', `${student.name} 이름`);
+        nameInput.addEventListener('change', (e) => {
+            const newName = e.target.value.trim();
+            if (newName.length === 0) {
+                // 빈 이름은 허용하지 않음 — 원래 값 복원
+                e.target.value = student.name;
+                return;
+            }
+            onUpdate(index, 'name', newName);
+        });
+        info.appendChild(nameInput);
 
-        const details = [];
-        if (student.grade !== '-') details.push(`${student.grade}학년`);
-        if (student.class !== '-') details.push(`${student.class}반`);
-        if (student.number !== '-') details.push(`${student.number}번`);
-        if (student.gender !== '-') details.push(student.gender);
+        // 상세 정보 (학년/반/번호/성별)
+        const detailLine = document.createElement('div');
+        detailLine.className = 'preview-details-editable';
 
-        if (details.length > 0) {
-            const detailLine = document.createElement('div');
-            detailLine.className = 'preview-details-editable';
-            detailLine.textContent = details.join(' ');
-            info.appendChild(detailLine);
+        // 학년/반 (읽기 전용)
+        if (student.grade !== '-' || student.class !== '-') {
+            const gradeClass = document.createElement('span');
+            gradeClass.className = 'preview-grade-class';
+            const parts = [];
+            if (student.grade !== '-') parts.push(`${student.grade}학년`);
+            if (student.class !== '-') parts.push(`${student.class}반`);
+            gradeClass.textContent = parts.join(' ');
+            detailLine.appendChild(gradeClass);
         }
 
+        // 번호 (편집 가능)
+        const numberWrapper = document.createElement('span');
+        numberWrapper.className = 'preview-number-wrapper';
+        const numberInput = document.createElement('input');
+        numberInput.type = 'text';
+        numberInput.className = 'preview-number-input';
+        numberInput.value = student.number === '-' ? '' : student.number;
+        numberInput.placeholder = '번호';
+        numberInput.setAttribute('aria-label', `${student.name} 번호`);
+        numberInput.addEventListener('change', (e) => onUpdate(index, 'number', e.target.value));
+        numberWrapper.appendChild(numberInput);
+        numberWrapper.appendChild(document.createTextNode('번'));
+        detailLine.appendChild(numberWrapper);
+
+        // 성별 (편집 가능 - 토글)
+        const genderToggleContainer = document.createElement('div');
+        genderToggleContainer.className = 'preview-gender-toggle';
+        genderToggleContainer.setAttribute('role', 'radiogroup');
+        genderToggleContainer.setAttribute('aria-label', `${student.name} 성별 선택`);
+
+        const genderOptions = [
+            { value: '여', text: '여' },
+            { value: '남', text: '남' },
+            { value: '-', text: '표기 안 함' }
+        ];
+
+        genderOptions.forEach(opt => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'preview-gender-btn';
+            if (opt.value === student.gender) {
+                btn.classList.add('active');
+                btn.setAttribute('aria-checked', 'true');
+            } else {
+                btn.setAttribute('aria-checked', 'false');
+            }
+            btn.textContent = opt.text;
+            btn.setAttribute('role', 'radio');
+            btn.setAttribute('data-value', opt.value);
+            btn.addEventListener('click', () => {
+                genderToggleContainer.querySelectorAll('.preview-gender-btn').forEach(b => {
+                    b.classList.remove('active');
+                    b.setAttribute('aria-checked', 'false');
+                });
+                btn.classList.add('active');
+                btn.setAttribute('aria-checked', 'true');
+                onUpdate(index, 'gender', opt.value);
+            });
+            genderToggleContainer.appendChild(btn);
+        });
+
+        detailLine.appendChild(genderToggleContainer);
+        info.appendChild(detailLine);
+
+        // 삭제 버튼
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'preview-item-delete';
+        deleteBtn.textContent = '삭제';
+        deleteBtn.setAttribute('aria-label', `${student.name} 삭제`);
+        deleteBtn.addEventListener('click', () => onDelete(index));
+
         div.appendChild(info);
-        elements.recentPreviewList.appendChild(div);
+        div.appendChild(deleteBtn);
+        containerEl.appendChild(div);
     });
+}
+
+// 최근 학급 미리보기 (편집 가능, localStorage 자동 동기화)
+function renderRecentPreview(students) {
+    renderEditablePreview({
+        containerEl: elements.recentPreviewList,
+        countEl: elements.recentPreviewCount,
+        sectionEl: elements.recentPreviewSection,
+        students,
+        onUpdate: (index, field, value) => {
+            if (!AppState.students[index]) return;
+            if (field === 'name') {
+                AppState.students[index].name = value;
+            } else if (field === 'number') {
+                AppState.students[index].number = value.trim() || '-';
+            } else if (field === 'gender') {
+                AppState.students[index].gender = value;
+            }
+            updateRecentClassInStorage(AppState._loadedRecentClassId, AppState.students);
+            renderRecentPreview(AppState.students);
+        },
+        onDelete: (index) => {
+            AppState.students.splice(index, 1);
+            updateRecentClassInStorage(AppState._loadedRecentClassId, AppState.students);
+            renderRecentPreview(AppState.students);
+            elements.totalStudents.textContent = AppState.students.length;
+            announceToScreenReader(`학생이 삭제되었습니다. 현재 ${AppState.students.length}명`);
+            if (AppState.students.length === 0) {
+                elements.step1Next.disabled = true;
+                elements.recentPreviewSection.style.display = 'none';
+                elements.studentCount.style.display = 'none';
+            }
+        }
+    });
+}
+
+// 최근 학급 localStorage 동기화
+function updateRecentClassInStorage(id, students) {
+    if (!id) return;
+    const classes = loadRecentClasses();
+    const idx = classes.findIndex(c => c.id === id);
+    if (idx === -1) return;
+    classes[idx].students = students.map(s => ({ ...s }));
+    classes[idx].timestamp = Date.now();
+    try {
+        localStorage.setItem(RECENT_CLASSES_KEY, JSON.stringify(classes));
+    } catch (e) {
+        console.warn('최근 학급 업데이트 실패:', e);
+    }
 }
 
 function deleteRecentClass(id) {
@@ -1585,207 +1713,67 @@ function parseManualNames(text) {
         .filter(name => name.length > 0);
 }
 
-// 미리보기 렌더링
+// 직접 입력 미리보기 (편집 가능)
+// textarea가 source of truth — 이름/삭제는 textarea도 함께 갱신한다.
 function renderPreview(students) {
-    elements.previewList.innerHTML = '';
-    elements.previewCount.textContent = students.length;
-    elements.manualPreviewSection.style.display = 'block';
-
-    students.forEach((student, index) => {
-        const div = document.createElement('div');
-        div.className = 'preview-item';
-
-        // 학생 정보
-        const info = document.createElement('div');
-        info.className = 'preview-info';
-
-        // 이름 (읽기 전용)
-        const nameLine = document.createElement('div');
-        nameLine.className = 'preview-name';
-        nameLine.textContent = student.name;
-        info.appendChild(nameLine);
-
-        // 상세 정보 (편집 가능)
-        const detailLine = document.createElement('div');
-        detailLine.className = 'preview-details-editable';
-
-        // 학년/반 (읽기 전용)
-        if (student.grade !== '-' || student.class !== '-') {
-            const gradeClass = document.createElement('span');
-            gradeClass.className = 'preview-grade-class';
-            const parts = [];
-            if (student.grade !== '-') parts.push(`${student.grade}학년`);
-            if (student.class !== '-') parts.push(`${student.class}반`);
-            gradeClass.textContent = parts.join(' ');
-            detailLine.appendChild(gradeClass);
-        }
-
-        // 번호 (편집 가능)
-        const numberWrapper = document.createElement('span');
-        numberWrapper.className = 'preview-number-wrapper';
-        const numberInput = document.createElement('input');
-        numberInput.type = 'text';
-        numberInput.className = 'preview-number-input';
-        numberInput.value = student.number === '-' ? '' : student.number;
-        numberInput.placeholder = '번호';
-        numberInput.setAttribute('aria-label', `${student.name} 번호`);
-        numberInput.addEventListener('change', (e) => updatePreviewItem(index, 'number', e.target.value));
-        numberWrapper.appendChild(numberInput);
-        numberWrapper.appendChild(document.createTextNode('번'));
-        detailLine.appendChild(numberWrapper);
-
-        // 성별 (편집 가능 - 토글)
-        const genderToggleContainer = document.createElement('div');
-        genderToggleContainer.className = 'preview-gender-toggle';
-        genderToggleContainer.setAttribute('role', 'radiogroup');
-        genderToggleContainer.setAttribute('aria-label', `${student.name} 성별 선택`);
-
-        const genderOptions = [
-            { value: '여', text: '여' },
-            { value: '남', text: '남' },
-            { value: '-', text: '표기 안 함' }
-        ];
-
-        genderOptions.forEach(opt => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'preview-gender-btn';
-            if (opt.value === student.gender) {
-                btn.classList.add('active');
-                btn.setAttribute('aria-checked', 'true');
-            } else {
-                btn.setAttribute('aria-checked', 'false');
+    renderEditablePreview({
+        containerEl: elements.previewList,
+        countEl: elements.previewCount,
+        sectionEl: elements.manualPreviewSection,
+        students,
+        onUpdate: (index, field, value) => {
+            if (!AppState.tempStudents || !AppState.tempStudents[index]) return;
+            if (field === 'name') {
+                AppState.tempStudents[index].name = value;
+                // textarea도 동기화 (이름만 모아서 join)
+                elements.manualNames.value = AppState.tempStudents.map(s => s.name).join('\n');
+                renderPreview(AppState.tempStudents);
+            } else if (field === 'number') {
+                AppState.tempStudents[index].number = value.trim() || '-';
+            } else if (field === 'gender') {
+                AppState.tempStudents[index].gender = value;
             }
-            btn.textContent = opt.text;
-            btn.setAttribute('role', 'radio');
-            btn.setAttribute('data-value', opt.value);
-            btn.addEventListener('click', () => {
-                // 같은 그룹의 모든 버튼 비활성화
-                genderToggleContainer.querySelectorAll('.preview-gender-btn').forEach(b => {
-                    b.classList.remove('active');
-                    b.setAttribute('aria-checked', 'false');
-                });
-                // 현재 버튼 활성화
-                btn.classList.add('active');
-                btn.setAttribute('aria-checked', 'true');
-                // 값 업데이트
-                updatePreviewItem(index, 'gender', opt.value);
-            });
-            genderToggleContainer.appendChild(btn);
-        });
-
-        detailLine.appendChild(genderToggleContainer);
-
-        info.appendChild(detailLine);
-
-        // 삭제 버튼
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'preview-item-delete';
-        deleteBtn.textContent = '삭제';
-        deleteBtn.setAttribute('aria-label', `${student.name} 삭제`);
-        deleteBtn.addEventListener('click', () => deletePreviewItem(index));
-
-        div.appendChild(info);
-        div.appendChild(deleteBtn);
-        elements.previewList.appendChild(div);
+        },
+        onDelete: (index) => {
+            // textarea와 tempStudents 동시 갱신 후 재파싱 트리거
+            const names = parseManualNames(elements.manualNames.value.trim());
+            names.splice(index, 1);
+            elements.manualNames.value = names.join('\n');
+            handleManualInput();
+        }
     });
 }
 
-// 미리보기 항목 업데이트
-function updatePreviewItem(index, field, value) {
-    if (!AppState.tempStudents || !AppState.tempStudents[index]) return;
-
-    // 값 업데이트
-    if (field === 'number') {
-        AppState.tempStudents[index].number = value.trim() || '-';
-    } else if (field === 'gender') {
-        AppState.tempStudents[index].gender = value;
-    }
-}
-
-// 미리보기 항목 삭제
-function deletePreviewItem(index) {
-    // 현재 이름 목록 가져오기
-    const namesText = elements.manualNames.value.trim();
-    const names = parseManualNames(namesText);
-
-    // 해당 인덱스 삭제
-    names.splice(index, 1);
-
-    // textarea 업데이트
-    elements.manualNames.value = names.join('\n');
-
-    // 미리보기 재렌더링
-    handleManualInput();
-}
-
-// CSV 미리보기 렌더링 (비밀선발 제외)
+// CSV(파일 업로드) 미리보기 (편집 가능)
 function renderCsvPreview(students) {
-    elements.csvPreviewList.innerHTML = '';
-    elements.csvPreviewCount.textContent = students.length;
-    elements.csvPreviewSection.style.display = 'block';
-
-    students.forEach((student, index) => {
-        const div = document.createElement('div');
-        div.className = 'preview-item';
-
-        // 학생 정보
-        const info = document.createElement('div');
-        info.className = 'preview-info';
-
-        // 이름
-        const nameLine = document.createElement('div');
-        nameLine.className = 'preview-name';
-        nameLine.textContent = student.name;
-        info.appendChild(nameLine);
-
-        // 상세 정보 (학년, 반, 번호, 성별)
-        const detailLine = document.createElement('div');
-        detailLine.className = 'preview-details-editable';
-
-        const details = [];
-        if (student.grade !== '-') details.push(`${student.grade}학년`);
-        if (student.class !== '-') details.push(`${student.class}반`);
-        if (student.number !== '-') details.push(`${student.number}번`);
-        if (student.gender !== '-') details.push(student.gender);
-
-        detailLine.textContent = details.join(' ');
-        info.appendChild(detailLine);
-
-        // 삭제 버튼
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'preview-item-delete';
-        deleteBtn.textContent = '삭제';
-        deleteBtn.setAttribute('aria-label', `${student.name} 삭제`);
-        deleteBtn.addEventListener('click', () => deleteCsvPreviewItem(index));
-
-        div.appendChild(info);
-        div.appendChild(deleteBtn);
-        elements.csvPreviewList.appendChild(div);
+    renderEditablePreview({
+        containerEl: elements.csvPreviewList,
+        countEl: elements.csvPreviewCount,
+        sectionEl: elements.csvPreviewSection,
+        students,
+        onUpdate: (index, field, value) => {
+            if (!AppState.students[index]) return;
+            if (field === 'name') {
+                AppState.students[index].name = value;
+            } else if (field === 'number') {
+                AppState.students[index].number = value.trim() || '-';
+            } else if (field === 'gender') {
+                AppState.students[index].gender = value;
+            }
+        },
+        onDelete: (index) => {
+            AppState.students.splice(index, 1);
+            renderCsvPreview(AppState.students);
+            elements.totalStudents.textContent = AppState.students.length;
+            elements.fileInfo.textContent = `${AppState.students.length}명`;
+            updateNextButtonLabel();
+            announceToScreenReader(`학생이 삭제되었습니다. 현재 ${AppState.students.length}명`);
+            if (AppState.students.length === 0) {
+                elements.step1Next.disabled = true;
+                elements.csvPreviewSection.style.display = 'none';
+            }
+        }
     });
-}
-
-// CSV 미리보기 항목 삭제
-function deleteCsvPreviewItem(index) {
-    // AppState.students에서 삭제
-    AppState.students.splice(index, 1);
-
-    // 미리보기 재렌더링
-    renderCsvPreview(AppState.students);
-
-    // UI 업데이트
-    elements.totalStudents.textContent = AppState.students.length;
-    elements.fileInfo.textContent = `${AppState.students.length}명`;
-    updateNextButtonLabel();
-
-    // 스크린 리더 알림
-    announceToScreenReader(`학생이 삭제되었습니다. 현재 ${AppState.students.length}명`);
-
-    // 학생이 0명이 되면 다음 버튼 비활성화
-    if (AppState.students.length === 0) {
-        elements.step1Next.disabled = true;
-        elements.csvPreviewSection.style.display = 'none';
-    }
 }
 
 // CSV 파일 삭제
