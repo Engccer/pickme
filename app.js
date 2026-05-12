@@ -1450,11 +1450,15 @@ function loadRecentClass(id) {
 
 // 공통 편집 가능 미리보기 헬퍼
 // 세 입력 경로(직접 입력 / 파일 업로드 / 최근 학급)가 모두 이 함수를 호출한다.
-// 이름·번호·성별 편집 + 삭제를 일관되게 제공하며, store 갱신은 onUpdate/onDelete 콜백에 위임한다.
-function renderEditablePreview({ containerEl, countEl, sectionEl, students, onUpdate, onDelete }) {
+// 이름·번호·성별 편집 + 삭제 + 추가를 일관되게 제공하며, store 갱신은 콜백에 위임한다.
+function renderEditablePreview({ containerEl, countEl, sectionEl, students, onUpdate, onDelete, onAdd }) {
+    // 재렌더링 시 추가 input에 입력 중이던 값 보존
+    const previousAddValue = containerEl.querySelector('.preview-add-input')?.value || '';
+
     containerEl.innerHTML = '';
     countEl.textContent = students.length;
-    sectionEl.style.display = students.length > 0 ? 'block' : 'none';
+    // 학생이 없어도 추가 영역은 보여야 하므로 onAdd가 있으면 섹션을 띄운다
+    sectionEl.style.display = (students.length > 0 || onAdd) ? 'block' : 'none';
 
     students.forEach((student, index) => {
         const div = document.createElement('div');
@@ -1560,6 +1564,69 @@ function renderEditablePreview({ containerEl, countEl, sectionEl, students, onUp
         div.appendChild(deleteBtn);
         containerEl.appendChild(div);
     });
+
+    // 추가 영역 (리스트 마지막)
+    if (onAdd) {
+        const addRow = document.createElement('div');
+        addRow.className = 'preview-add-row';
+
+        const addInput = document.createElement('input');
+        addInput.type = 'text';
+        addInput.className = 'preview-add-input';
+        addInput.placeholder = '학생 추가 (이름 입력)';
+        addInput.value = previousAddValue;
+        addInput.setAttribute('aria-label', '새 학생 이름 입력');
+
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'preview-add-btn';
+        addBtn.textContent = '+ 추가';
+        addBtn.setAttribute('aria-label', '학생 추가');
+
+        const handleAdd = () => {
+            const name = addInput.value.trim();
+            if (name.length === 0) {
+                addInput.focus();
+                return;
+            }
+            // 캡처 전에 비워서 재렌더링된 새 input이 빈 상태로 시작하도록 함
+            addInput.value = '';
+            onAdd(name);
+            // 재렌더링 후 새 입력란에 포커스 (연속 추가 편의)
+            const nextInput = containerEl.querySelector('.preview-add-input');
+            if (nextInput) nextInput.focus();
+        };
+
+        addBtn.addEventListener('click', handleAdd);
+        addInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleAdd();
+            }
+        });
+
+        addRow.appendChild(addInput);
+        addRow.appendChild(addBtn);
+        containerEl.appendChild(addRow);
+    }
+}
+
+// 기존 학생들로부터 학년/반/다음 번호 추론
+// 모두 같은 값이면 그 값으로, 다르면 '-'. 번호는 최대값 + 1.
+function inferDefaultsFromStudents(students) {
+    if (!students || students.length === 0) {
+        return { grade: '-', class: '-', number: '-' };
+    }
+    const grades = new Set(students.map(s => s.grade));
+    const classes = new Set(students.map(s => s.class));
+    const numbers = students
+        .map(s => parseInt(s.number, 10))
+        .filter(n => !isNaN(n));
+    return {
+        grade: grades.size === 1 ? [...grades][0] : '-',
+        class: classes.size === 1 ? [...classes][0] : '-',
+        number: numbers.length > 0 ? String(Math.max(...numbers) + 1) : '-'
+    };
 }
 
 // 최근 학급 미리보기 (편집 가능, localStorage 자동 동기화)
@@ -1589,9 +1656,18 @@ function renderRecentPreview(students) {
             announceToScreenReader(`학생이 삭제되었습니다. 현재 ${AppState.students.length}명`);
             if (AppState.students.length === 0) {
                 elements.step1Next.disabled = true;
-                elements.recentPreviewSection.style.display = 'none';
                 elements.studentCount.style.display = 'none';
             }
+        },
+        onAdd: (name) => {
+            const defaults = inferDefaultsFromStudents(AppState.students);
+            AppState.students.push({ name, ...defaults, gender: '-' });
+            updateRecentClassInStorage(AppState._loadedRecentClassId, AppState.students);
+            renderRecentPreview(AppState.students);
+            elements.totalStudents.textContent = AppState.students.length;
+            elements.studentCount.style.display = 'block';
+            elements.step1Next.disabled = false;
+            announceToScreenReader(`${name} 추가됨. 현재 ${AppState.students.length}명`);
         }
     });
 }
@@ -1740,6 +1816,13 @@ function renderPreview(students) {
             names.splice(index, 1);
             elements.manualNames.value = names.join('\n');
             handleManualInput();
+        },
+        onAdd: (name) => {
+            // textarea에 한 줄 추가 → handleManualInput이 자동번호/학년/반을 자동 적용
+            const current = elements.manualNames.value.trim();
+            elements.manualNames.value = current ? current + '\n' + name : name;
+            handleManualInput();
+            announceToScreenReader(`${name} 추가됨`);
         }
     });
 }
@@ -1770,8 +1853,17 @@ function renderCsvPreview(students) {
             announceToScreenReader(`학생이 삭제되었습니다. 현재 ${AppState.students.length}명`);
             if (AppState.students.length === 0) {
                 elements.step1Next.disabled = true;
-                elements.csvPreviewSection.style.display = 'none';
             }
+        },
+        onAdd: (name) => {
+            const defaults = inferDefaultsFromStudents(AppState.students);
+            AppState.students.push({ name, ...defaults, gender: '-' });
+            renderCsvPreview(AppState.students);
+            elements.totalStudents.textContent = AppState.students.length;
+            elements.fileInfo.textContent = `${AppState.students.length}명`;
+            updateNextButtonLabel();
+            elements.step1Next.disabled = false;
+            announceToScreenReader(`${name} 추가됨. 현재 ${AppState.students.length}명`);
         }
     });
 }
