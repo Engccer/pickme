@@ -323,7 +323,7 @@ function initEventListeners() {
         }
 
         // 버튼 상태 복원
-        elements.pauseBtn.innerHTML = '⏸ 일시 정지';
+        elements.pauseBtn.innerHTML = '일시 정지';
         elements.pauseBtn.setAttribute('aria-label', '일시 정지');
         elements.pauseBtn.disabled = false;
 
@@ -987,7 +987,7 @@ function pausePicking() {
     elements.pauseMenu.style.display = 'flex';
 
     // 버튼 문구 변경
-    elements.pauseBtn.innerHTML = '⏸ 일시 정지됨';
+    elements.pauseBtn.innerHTML = '일시 정지됨';
     elements.pauseBtn.setAttribute('aria-label', '일시 정지됨');
     elements.pauseBtn.disabled = true;
 }
@@ -998,7 +998,7 @@ function resumePicking() {
     elements.pauseMenu.style.display = 'none';
 
     // 버튼 문구 복원
-    elements.pauseBtn.innerHTML = '⏸ 일시 정지';
+    elements.pauseBtn.innerHTML = '일시 정지';
     elements.pauseBtn.setAttribute('aria-label', '일시 정지');
     elements.pauseBtn.disabled = false;
 
@@ -1012,12 +1012,9 @@ function displayResults() {
     if (purpose) {
         elements.congratulationsMessage.style.display = 'block';
         elements.congratulationsMessage.innerHTML = `
-            <h3>🎉 축하합니다! 🎉</h3>
-            <p><strong>${purpose}</strong>로 선발된 것을 축하합니다!</p>
-            <img src="https://media.giphy.com/media/g9582DNuQppxC/giphy.gif"
-                 alt="축하 애니메이션"
-                 class="congratulations-gif"
-                 onerror="this.style.display='none'">
+            <span class="congrats-label">선발 완료</span>
+            <h3 class="congrats-title">${purpose}</h3>
+            <p class="congrats-sub">축하합니다</p>
         `;
     } else {
         elements.congratulationsMessage.style.display = 'none';
