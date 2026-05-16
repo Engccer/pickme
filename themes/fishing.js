@@ -153,6 +153,11 @@ async function runFishingAnimation(canvas, selectedStudents, addPickedStudent) {
         let waitTime = -360; // 초기 대기 시간 약 6초 (60fps 기준)
         let cycleTime = 0; // 전체 사이클 경과 시간
         const maxCycleTime = 360; // 약 6초 (60fps 기준)
+        let isComplete = false; // 모든 선발 완료 후 추가 잡기 시도 방지
+
+        // RAF 잔존으로 다른 테마 canvas 오염 방지 — cleanup 후에는 새 frame 그리지 않음
+        let isDisposed = false;
+        let rafId = null;
 
         let messageElement = document.querySelector('.animation-message');
 
@@ -162,8 +167,6 @@ async function runFishingAnimation(canvas, selectedStudents, addPickedStudent) {
                 messageElement.textContent = message;
             }
         }
-
-        updateMessage('낚시대를 준비하고 있습니다...');
 
         // 물결 애니메이션
         function animateWater(time) {
@@ -281,6 +284,7 @@ async function runFishingAnimation(canvas, selectedStudents, addPickedStudent) {
 
                     if (currentPickIndex >= selectedStudents.length) {
                         // 모든 선발 완료
+                        isComplete = true;
                         updateMessage('선발 완료!');
                         setTimeout(() => {
                             cleanup();
@@ -320,6 +324,9 @@ async function runFishingAnimation(canvas, selectedStudents, addPickedStudent) {
 
         // 애니메이션 루프
         function animate() {
+            // dispose 후에는 추가 RAF 등록/렌더 금지 (canvas 오염 방지)
+            if (isDisposed) return;
+
             const time = Date.now();
 
             animateWater(time);
@@ -329,7 +336,7 @@ async function runFishingAnimation(canvas, selectedStudents, addPickedStudent) {
 
             // 일시 중지 확인
             if (window.AppState && window.AppState.isPaused) {
-                requestAnimationFrame(animate);
+                rafId = requestAnimationFrame(animate);
                 return;
             }
 
@@ -343,8 +350,8 @@ async function runFishingAnimation(canvas, selectedStudents, addPickedStudent) {
             // 사이클 타이머 증가
             cycleTime++;
 
-            // 6초 경과 시 강제로 물고기 잡기
-            if (cycleTime >= maxCycleTime && !caughtFish && !isReeling) {
+            // 6초 경과 시 강제로 물고기 잡기 (단, 모든 선발 완료 후에는 시도하지 않음)
+            if (cycleTime >= maxCycleTime && !caughtFish && !isReeling && !isComplete) {
                 // 가장 가까운 물고기 강제 잡기
                 let closestFish = null;
                 let closestDistance = Infinity;
@@ -374,8 +381,8 @@ async function runFishingAnimation(canvas, selectedStudents, addPickedStudent) {
                 }
             }
 
-            // 낚시 상태 관리
-            if (!isCasting && !isReeling && !caughtFish) {
+            // 낚시 상태 관리 (모든 선발 완료 후에는 새로 던지지 않음)
+            if (!isCasting && !isReeling && !caughtFish && !isComplete) {
                 waitTime++;
 
                 if (waitTime > 30) { // 약 0.5초 대기
@@ -392,11 +399,17 @@ async function runFishingAnimation(canvas, selectedStudents, addPickedStudent) {
             waterLight.intensity = 0.5 + Math.sin(time * 0.002) * 0.2;
 
             renderer.render(scene, camera);
-            requestAnimationFrame(animate);
+            rafId = requestAnimationFrame(animate);
         }
 
         // 정리 함수
         function cleanup() {
+            // RAF 가드 — cleanup 후 큐에 남은 frame이 발동해도 즉시 return
+            isDisposed = true;
+            if (rafId !== null) {
+                cancelAnimationFrame(rafId);
+                rafId = null;
+            }
             scene.traverse((object) => {
                 if (object.geometry) {
                     object.geometry.dispose();
@@ -431,7 +444,12 @@ async function runFishingAnimation(canvas, selectedStudents, addPickedStudent) {
         // 초기 카메라 위치 설정
         onWindowResize();
 
-        // 애니메이션 시작
-        animate();
+        // 첫 프레임을 먼저 그린 뒤 메시지를 표시 — 검은 화면에 글자만 먼저 뜨는 문제 방지
+        renderer.render(scene, camera);
+        rafId = requestAnimationFrame(() => {
+            if (isDisposed) return;
+            updateMessage('낚시대를 준비하고 있습니다...');
+            animate();
+        });
     });
 }

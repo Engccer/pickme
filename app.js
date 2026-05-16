@@ -882,6 +882,12 @@ async function runThemeAnimation() {
     elements.steps[3].style.display = 'none';
     elements.steps[3].classList.remove('active');
 
+    // 이전 라운드의 메시지 잔재 제거 — 검은 화면에 글자만 먼저 뜨는 문제 방지
+    // (각 테마가 첫 프레임 render 직후 메시지를 다시 채움)
+    if (elements.animationMessage) {
+        elements.animationMessage.textContent = '';
+    }
+
     // 애니메이션 컨테이너 전체화면 표시
     elements.animationContainer.style.display = 'block';
     elements.animationContainer.classList.add('fullscreen-animation');

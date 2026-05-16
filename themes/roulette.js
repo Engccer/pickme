@@ -144,6 +144,10 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
         let currentPickIndex = 0;
         let messageElement = document.querySelector('.animation-message');
 
+        // RAF 잔존으로 다른 테마 canvas 오염 방지 — cleanup 후에는 새 frame 그리지 않음
+        let isDisposed = false;
+        let rafId = null;
+
         // 메시지 업데이트
         function updateMessage(message) {
             if (messageElement) {
@@ -151,13 +155,14 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
             }
         }
 
-        updateMessage('룰렛을 돌리는 중...');
-
         // 애니메이션 루프
         function animate() {
+            // dispose 후에는 추가 RAF 등록/렌더 금지
+            if (isDisposed) return;
+
             // 일시 중지 확인
             if (window.AppState && window.AppState.isPaused) {
-                requestAnimationFrame(animate);
+                rafId = requestAnimationFrame(animate);
                 return;
             }
 
@@ -184,7 +189,7 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
                     currentPickIndex++;
                     rotationSpeed = 0.3;
                     isSpinning = true;
-                    requestAnimationFrame(animate);
+                    rafId = requestAnimationFrame(animate);
                 } else {
                     // 모든 선발 완료
                     updateMessage('선발 완료!');
@@ -220,11 +225,17 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
             pointLight2.intensity = 0.8 + Math.sin(Date.now() * 0.005) * 0.3;
 
             renderer.render(scene, camera);
-            requestAnimationFrame(animate);
+            rafId = requestAnimationFrame(animate);
         }
 
         // 정리 함수
         function cleanup() {
+            // RAF 가드 — cleanup 후 큐에 남은 frame이 발동해도 즉시 return
+            isDisposed = true;
+            if (rafId !== null) {
+                cancelAnimationFrame(rafId);
+                rafId = null;
+            }
             scene.traverse((object) => {
                 if (object.geometry) {
                     object.geometry.dispose();
@@ -260,7 +271,12 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
         // 초기 카메라 위치 설정
         onWindowResize();
 
-        // 애니메이션 시작
-        animate();
+        // 첫 프레임을 먼저 그린 뒤 메시지를 표시 — 검은 화면에 글자만 먼저 뜨는 문제 방지
+        renderer.render(scene, camera);
+        rafId = requestAnimationFrame(() => {
+            if (isDisposed) return;
+            updateMessage('룰렛을 돌리는 중...');
+            animate();
+        });
     });
 }

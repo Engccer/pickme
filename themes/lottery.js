@@ -117,6 +117,11 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
         const mixingDuration = 3000; // 3초간 섞기
         let isPicking = false;
         let pickingStartTime = 0;
+        let isComplete = false; // 모든 선발 완료 후 카운터 재진입 방지
+
+        // RAF 잔존으로 다른 테마 canvas 오염 방지 — cleanup 후에는 새 frame 그리지 않음
+        let isDisposed = false;
+        let rafId = null;
 
         let messageElement = document.querySelector('.animation-message');
 
@@ -127,7 +132,11 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
             }
         }
 
-        updateMessage('공을 섞는 중...');
+        // 진행 카운터 메시지 (분자가 분모를 초과하지 않게 clamp)
+        function pickingMessage() {
+            const display = Math.min(currentPickIndex + 1, selectedStudents.length);
+            return `${display}/${selectedStudents.length} 선발 중...`;
+        }
 
         // 공 섞기 물리 시뮬레이션
         function mixBalls() {
@@ -232,11 +241,14 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
 
         // 애니메이션 루프
         function animate() {
+            // dispose 후에는 추가 RAF 등록/렌더 금지 (canvas 오염 방지)
+            if (isDisposed) return;
+
             const currentTime = Date.now();
 
             // 일시 중지 확인
             if (window.AppState && window.AppState.isPaused) {
-                requestAnimationFrame(animate);
+                rafId = requestAnimationFrame(animate);
                 return;
             }
 
@@ -247,11 +259,25 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
                 return;
             }
 
-            // 1단계: 공 섞기
+            // 1단계: 공 섞기 (mixing 동안에도 매 프레임 render 해야 정지 화면이 안 보임)
             if (mixingTime < mixingDuration) {
                 mixBalls();
                 mixingTime += 16; // ~60fps
-                requestAnimationFrame(animate);
+                pointLight1.position.x = Math.sin(currentTime * 0.001) * 10;
+                pointLight2.position.x = Math.cos(currentTime * 0.001) * 10;
+                renderer.render(scene, camera);
+                rafId = requestAnimationFrame(animate);
+                return;
+            }
+
+            // 완료 단계: cleanup 대기 중 카운터 메시지가 '선발 완료!'를 덮어쓰지 않도록 가드
+            if (isComplete) {
+                mixBalls();
+                animateSelectedBalls();
+                pointLight1.position.x = Math.sin(currentTime * 0.001) * 10;
+                pointLight2.position.x = Math.cos(currentTime * 0.001) * 10;
+                renderer.render(scene, camera);
+                rafId = requestAnimationFrame(animate);
                 return;
             }
 
@@ -259,7 +285,7 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
             if (!isPicking) {
                 isPicking = true;
                 pickingStartTime = currentTime;
-                updateMessage(`${currentPickIndex + 1}/${selectedStudents.length} 선발 중...`);
+                updateMessage(pickingMessage());
             }
 
             if (isPicking) {
@@ -284,6 +310,7 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
                     if (currentPickIndex >= selectedStudents.length) {
                         // 선발 완료
                         isPicking = false;
+                        isComplete = true;
                         updateMessage('선발 완료!');
 
                         setTimeout(() => {
@@ -292,7 +319,7 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
                         }, 3000);
                     } else {
                         pickingStartTime = currentTime;
-                        updateMessage(`${currentPickIndex + 1}/${selectedStudents.length} 선발 중...`);
+                        updateMessage(pickingMessage());
                     }
                 }
             }
@@ -304,11 +331,17 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
             pointLight2.position.x = Math.cos(currentTime * 0.001) * 10;
 
             renderer.render(scene, camera);
-            requestAnimationFrame(animate);
+            rafId = requestAnimationFrame(animate);
         }
 
         // 정리 함수
         function cleanup() {
+            // RAF 가드 — cleanup 후 큐에 남은 frame이 발동해도 즉시 return
+            isDisposed = true;
+            if (rafId !== null) {
+                cancelAnimationFrame(rafId);
+                rafId = null;
+            }
             scene.traverse((object) => {
                 if (object.geometry) {
                     object.geometry.dispose();
@@ -343,7 +376,12 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
         // 초기 카메라 위치 설정
         onWindowResize();
 
-        // 애니메이션 시작
-        animate();
+        // 첫 프레임을 먼저 그린 뒤 메시지를 표시 — 검은 화면에 글자만 먼저 뜨는 문제 방지
+        renderer.render(scene, camera);
+        rafId = requestAnimationFrame(() => {
+            if (isDisposed) return;
+            updateMessage('공을 섞는 중...');
+            animate();
+        });
     });
 }
