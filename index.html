@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pick Me — Classroom Picker</title>
+    <title>Pick Me — 학생 추첨</title>
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
     <link rel="stylesheet" href="styles.css">
@@ -11,161 +11,84 @@
 <body>
     <div class="app-shell">
 
-        <!-- =========================================================
-             LEFT RAIL: brand · boarding pass stepper · usage guide
-        ========================================================= -->
-        <aside class="app-rail" aria-label="앱 네비게이션">
-            <div class="brand">
-                <a href="#" class="brand-mark" aria-label="Pick Me 홈">
-                    <span class="brand-symbol" aria-hidden="true">
-                        <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
-                            <defs>
-                                <radialGradient id="spotGrad" cx="50%" cy="50%" r="55%">
-                                    <stop offset="0%" stop-color="#FFE45E"/>
-                                    <stop offset="60%" stop-color="#FF4FA3"/>
-                                    <stop offset="100%" stop-color="#7C3AED"/>
-                                </radialGradient>
-                            </defs>
-                            <circle cx="20" cy="20" r="17" fill="none" stroke="#111827" stroke-width="1.8"/>
-                            <circle cx="20" cy="20" r="11" fill="url(#spotGrad)"/>
-                            <circle cx="20" cy="20" r="3.5" fill="#111827"/>
-                            <path d="M32 5 L33 8.5 L36.5 9.5 L33 10.5 L32 14 L31 10.5 L27.5 9.5 L31 8.5 Z" fill="#22D3EE"/>
-                        </svg>
-                    </span>
-                    <span class="brand-wordmark">
-                        <span class="brand-text">Pick Me</span>
-                        <span class="brand-tag">학생 추첨</span>
-                    </span>
-                </a>
-                <span class="brand-sticker" aria-hidden="true">
-                    <span class="brand-sticker-dot"></span>
-                    Classroom Picker
+        <!-- 헤더 -->
+        <header class="app-header">
+            <a href="#" class="brand" aria-label="Pick Me 홈">
+                <span class="brand-symbol" aria-hidden="true">
+                    <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round">
+                        <circle cx="16" cy="16" r="13" stroke-width="1.4"/>
+                        <circle cx="16" cy="16" r="7" stroke-width="1.4" opacity="0.45"/>
+                        <circle cx="16" cy="16" r="2.4" fill="currentColor" stroke="none"/>
+                    </svg>
                 </span>
-            </div>
-
-            <hr class="rail-perforation" aria-hidden="true">
-
-            <!-- Boarding pass stepper (JS reads .progress-step[data-step]) -->
-            <nav class="boarding-stepper" aria-label="진행 단계">
-                <div class="progress-step boarding-step active" data-step="1">
-                    <span class="boarding-step-num">01</span>
-                    <span class="boarding-step-body">
-                        <span class="boarding-step-title">Roster</span>
-                        <span class="boarding-step-sub">명단</span>
-                    </span>
-                    <span class="boarding-step-dot" aria-hidden="true"></span>
-                </div>
-                <span class="boarding-rail-perf" aria-hidden="true"></span>
-                <div class="progress-step boarding-step" data-step="2">
-                    <span class="boarding-step-num">02</span>
-                    <span class="boarding-step-body">
-                        <span class="boarding-step-title">Rule</span>
-                        <span class="boarding-step-sub">조건</span>
-                    </span>
-                    <span class="boarding-step-dot" aria-hidden="true"></span>
-                </div>
-                <span class="boarding-rail-perf" aria-hidden="true"></span>
-                <div class="progress-step boarding-step" data-step="3">
-                    <span class="boarding-step-num">03</span>
-                    <span class="boarding-step-body">
-                        <span class="boarding-step-title">Stage</span>
-                        <span class="boarding-step-sub">선발</span>
-                    </span>
-                    <span class="boarding-step-dot" aria-hidden="true"></span>
-                </div>
-            </nav>
-
-            <hr class="rail-perforation" aria-hidden="true">
-
+                <span class="brand-text">Pick Me</span>
+                <span class="brand-sub">수업용 학생 추첨</span>
+            </a>
             <a href="https://github.com/Engccer/pickme#readme"
                target="_blank"
                rel="noopener noreferrer"
-               class="rail-usage-link usage-guide-link"
+               class="header-link"
                id="usageGuideLink"
-               aria-label="앱 사용법 (Ctrl+Shift+/) - 새 탭에서 열림">
-                <span>How to use</span>
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M4 12 L12 4 M12 4 L6 4 M12 4 L12 10"/>
-                </svg>
-            </a>
-        </aside>
+               aria-label="앱 사용법 (Ctrl+Shift+/) - 새 탭에서 열림">사용법</a>
+        </header>
 
-        <!-- =========================================================
-             MAIN PANEL
-        ========================================================= -->
+        <!-- 가로 progress stepper -->
+        <nav class="stepper" aria-label="진행 단계">
+            <div class="progress-step active" data-step="1">
+                <span class="step-num" aria-hidden="true">1</span>
+                <span class="step-name">명단</span>
+            </div>
+            <span class="step-line" aria-hidden="true"></span>
+            <div class="progress-step" data-step="2">
+                <span class="step-num" aria-hidden="true">2</span>
+                <span class="step-name">조건</span>
+            </div>
+            <span class="step-line" aria-hidden="true"></span>
+            <div class="progress-step" data-step="3">
+                <span class="step-num" aria-hidden="true">3</span>
+                <span class="step-name">선발</span>
+            </div>
+        </nav>
+
         <main class="app-main">
 
-            <!-- =========== STEP 1 :: ROSTER =========== -->
+            <!-- =========== STEP 1 :: 명단 =========== -->
             <div class="step-container active" id="step1">
                 <header class="step-header">
-                    <span class="step-kicker">Step 01 / Roster</span>
                     <h2 tabindex="-1" id="step1Title">학생 명단 불러오기</h2>
                     <p class="step-description">CSV/Excel을 올리거나, 이름을 직접 입력하거나, 최근 학급을 다시 불러올 수 있어요.</p>
                 </header>
 
                 <section class="card">
                     <div class="tabs" role="tablist" aria-label="명단 입력 방법">
-                        <button class="tab tab-btn active" id="csvTab" role="tab" aria-selected="true" aria-controls="csvPanel">
-                            <span class="tab-label">파일 업로드</span>
-                            <span class="tab-dot" aria-hidden="true"></span>
-                        </button>
-                        <button class="tab tab-btn" id="manualTab" role="tab" aria-selected="false" aria-controls="manualPanel">
-                            <span class="tab-label">직접 입력</span>
-                            <span class="tab-dot" aria-hidden="true"></span>
-                        </button>
-                        <button class="tab tab-btn" id="recentTab" role="tab" aria-selected="false" aria-controls="recentPanel">
-                            <span class="tab-label">최근 학급</span>
-                            <span class="tab-dot" aria-hidden="true"></span>
-                        </button>
+                        <button class="tab active" id="csvTab" role="tab" aria-selected="true" aria-controls="csvPanel">파일 업로드</button>
+                        <button class="tab" id="manualTab" role="tab" aria-selected="false" aria-controls="manualPanel">직접 입력</button>
+                        <button class="tab" id="recentTab" role="tab" aria-selected="false" aria-controls="recentPanel">최근 학급</button>
                     </div>
 
                     <!-- CSV panel -->
                     <div class="tab-panel active" id="csvPanel" role="tabpanel" aria-labelledby="csvTab">
-
-                        <!-- Roster Ticket Dropzone -->
-                        <div class="ticket-dropzone upload-area">
-                            <span class="dropzone-kicker">ROSTER DROP</span>
-
+                        <div class="upload-area">
                             <input type="file" id="csvFile" accept=".csv,.tsv,.txt,.md,.xlsx,.xls,.pdf,.hwpx,.docx" aria-label="명단 파일 선택">
 
-                            <div class="dropzone-body">
-                                <button type="button" class="dropzone-cta file-select-btn" id="fileSelectBtn" aria-label="명단 파일 선택">
-                                    <span class="dropzone-cta-icon" aria-hidden="true">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                                            <path d="M12 4 V16 M6 10 L12 4 L18 10"/>
-                                            <path d="M4 18 H20"/>
-                                        </svg>
-                                    </span>
-                                    <span class="dropzone-cta-text">명단 파일을 올려주세요</span>
-                                </button>
-                                <p class="dropzone-info file-info" id="fileInfo">파일을 선택하지 않았습니다</p>
-                            </div>
+                            <button type="button" class="upload-cta" id="fileSelectBtn" aria-label="명단 파일 선택">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M12 4 V16 M6 10 L12 4 L18 10"/>
+                                    <path d="M4 18 H20"/>
+                                </svg>
+                                <span>명단 파일 업로드</span>
+                            </button>
+                            <p class="file-info" id="fileInfo">파일을 선택하지 않았습니다</p>
 
-                            <div class="dropzone-formats" aria-label="지원 확장자">
-                                <span class="format-chip">CSV</span>
-                                <span class="format-chip">XLSX</span>
-                                <span class="format-chip">TSV</span>
-                                <span class="format-chip">TXT</span>
-                                <span class="format-chip">MD</span>
-                                <span class="format-chip">PDF</span>
-                                <span class="format-chip">HWPX</span>
-                                <span class="format-chip">DOCX</span>
-                            </div>
+                            <p class="formats-line">지원: CSV · XLSX · TSV · TXT · MD · PDF · HWPX · DOCX</p>
 
-                            <div class="dropzone-actions">
-                                <button type="button" class="dropzone-sample sample-download-btn" id="sampleDownloadBtn" aria-label="샘플 CSV 다운로드">
-                                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                        <path d="M8 2 V11 M4 7 L8 11 L12 7"/>
-                                        <path d="M2 13.5 H14"/>
-                                    </svg>
-                                    샘플 CSV
-                                </button>
-                                <button type="button" class="dropzone-delete file-delete-btn" id="fileDeleteBtn" style="display: none;" aria-label="파일 삭제">파일 삭제</button>
+                            <div class="upload-actions">
+                                <button type="button" class="text-btn" id="sampleDownloadBtn" aria-label="샘플 CSV 다운로드">샘플 CSV 받기</button>
+                                <button type="button" class="text-btn danger" id="fileDeleteBtn" style="display: none;" aria-label="파일 삭제">파일 삭제</button>
                             </div>
                         </div>
 
-                        <!-- CSV 미리보기 -->
-                        <div class="manual-input-section" id="csvPreviewSection" style="display: none;">
+                        <div class="preview-section" id="csvPreviewSection" style="display: none;">
                             <h3 class="section-sub-title">미리보기 <span class="count-chip"><span id="csvPreviewCount">0</span>명</span></h3>
                             <div class="preview-list" id="csvPreviewList"></div>
                         </div>
@@ -173,7 +96,7 @@
 
                     <!-- Manual panel -->
                     <div class="tab-panel" id="manualPanel" role="tabpanel" aria-labelledby="manualTab">
-                        <div class="manual-input-section">
+                        <div class="form-section">
                             <h3 class="section-sub-title">공통 정보 <span class="muted-tag">선택사항</span></h3>
                             <div class="common-info-inputs">
                                 <label class="field">
@@ -193,7 +116,7 @@
                             </div>
                         </div>
 
-                        <div class="manual-input-section">
+                        <div class="form-section">
                             <h3 class="section-sub-title">학생 이름 입력</h3>
                             <label class="field-block">
                                 <span class="field-label-small">한 줄에 한 명씩 / 콤마·공백 모두 OK</span>
@@ -205,7 +128,7 @@
                             </label>
                         </div>
 
-                        <div class="manual-input-section">
+                        <div class="form-section">
                             <label class="switch-card">
                                 <input type="checkbox" id="autoNumber" checked aria-label="번호 자동 생성">
                                 <span class="switch-track" aria-hidden="true">
@@ -227,7 +150,7 @@
                             </div>
                         </div>
 
-                        <div class="manual-input-section" id="manualPreviewSection" style="display: none;">
+                        <div class="preview-section" id="manualPreviewSection" style="display: none;">
                             <h3 class="section-sub-title">미리보기 <span class="count-chip"><span id="previewCount">0</span>명</span></h3>
                             <div class="preview-list" id="previewList"></div>
                         </div>
@@ -238,32 +161,27 @@
                         <div id="recentClassesList" class="recent-classes-list">
                             <p class="recent-empty-message" id="recentEmptyMsg">최근 사용한 학급이 없습니다</p>
                         </div>
-                        <div class="manual-input-section" id="recentPreviewSection" style="display: none;">
+                        <div class="preview-section" id="recentPreviewSection" style="display: none;">
                             <h3 class="section-sub-title">미리보기 <span class="count-chip"><span id="recentPreviewCount">0</span>명</span></h3>
                             <div class="preview-list" id="recentPreviewList"></div>
                         </div>
                     </div>
                 </section>
 
-                <!-- 학생 수 sticker -->
                 <div class="student-count" id="studentCount" style="display: none;">
-                    <span class="count-kicker">ROSTER LOADED</span>
-                    <span class="count-body">
-                        총 <strong id="totalStudents">0</strong>명의 학생이 무대로 올라갈 준비를 마쳤어요
-                    </span>
+                    총 <strong id="totalStudents">0</strong>명 준비 완료
                 </div>
 
                 <div class="step-navigation">
                     <button class="nav-btn next-btn" id="step1Next" disabled aria-label="다음 단계">
-                        다음 <span>→</span>
+                        다음 <span aria-hidden="true">→</span>
                     </button>
                 </div>
             </div>
 
-            <!-- =========== STEP 2 :: RULE =========== -->
+            <!-- =========== STEP 2 :: 조건 =========== -->
             <div class="step-container" id="step2">
                 <header class="step-header">
-                    <span class="step-kicker">Step 02 / Rule</span>
                     <h2 tabindex="-1" id="step2Title">선발 조건 설정</h2>
                     <p class="step-description">몇 명 뽑을지, 누구를 뽑을지 정해주세요. 역할 이름을 적으면 결과 화면에 크게 표시돼요.</p>
                 </header>
@@ -271,7 +189,7 @@
                 <section class="card">
                     <div class="setting-group">
                         <label class="field-block" for="totalPick">
-                            <span class="field-label">선발 인원 <span class="required-dot" aria-hidden="true">·</span></span>
+                            <span class="field-label">선발 인원</span>
                             <span class="field-unit">
                                 <input type="number" id="totalPick" min="1" placeholder="0" aria-label="총 선발 인원">
                                 <span class="unit-pill">명</span>
@@ -325,131 +243,75 @@
 
                 <div class="step-navigation">
                     <button class="nav-btn back-btn" id="step2Back" aria-label="이전 단계">
-                        <span>←</span> 이전
+                        <span aria-hidden="true">←</span> 이전
                     </button>
                     <button class="nav-btn next-btn" id="step2Next" disabled aria-label="다음 단계">
-                        다음 <span>→</span>
+                        다음 <span aria-hidden="true">→</span>
                     </button>
                 </div>
             </div>
 
-            <!-- =========== STEP 3 :: STAGE =========== -->
+            <!-- =========== STEP 3 :: 선발 =========== -->
             <div class="step-container" id="step3">
                 <header class="step-header">
-                    <span class="step-kicker">Step 03 / Stage</span>
                     <h2 tabindex="-1" id="step3Title">테마 선택</h2>
-                    <p class="step-description">오늘의 무대를 골라주세요. 발표 모먼트가 어떻게 펼쳐질지 미리 볼 수 있어요.</p>
+                    <p class="step-description">오늘의 추첨 무대를 골라주세요.</p>
                 </header>
 
-                <div class="step3-grid">
-                    <!-- Theme cards (posters) -->
-                    <div class="theme-selector" role="radiogroup" aria-label="테마 선택">
+                <div class="theme-selector" role="radiogroup" aria-label="테마 선택">
 
-                        <button type="button" class="theme-card" data-theme="roulette" role="radio" aria-checked="true">
-                            <span class="theme-graphic theme-graphic-roulette" aria-hidden="true">
-                                <span class="theme-graphic-wheel"></span>
-                                <span class="theme-graphic-needle"></span>
-                                <span class="theme-graphic-dot"></span>
-                            </span>
-                            <span class="theme-info">
-                                <span class="theme-tag">SPIN</span>
-                                <span class="theme-name">룰렛</span>
-                                <p class="theme-desc">회전하는 룰렛으로 선발</p>
-                            </span>
-                            <span class="theme-selected-sticker" aria-hidden="true">ON STAGE</span>
-                        </button>
+                    <button type="button" class="theme-card" data-theme="roulette" role="radio" aria-checked="true">
+                        <span class="theme-graphic theme-graphic-roulette" aria-hidden="true">
+                            <span class="theme-graphic-wheel"></span>
+                            <span class="theme-graphic-needle"></span>
+                            <span class="theme-graphic-dot"></span>
+                        </span>
+                        <span class="theme-info">
+                            <span class="theme-name">룰렛</span>
+                            <p class="theme-desc">회전하는 룰렛으로 선발</p>
+                        </span>
+                    </button>
 
-                        <button type="button" class="theme-card" data-theme="lottery" role="radio" aria-checked="false">
-                            <span class="theme-graphic theme-graphic-lottery" aria-hidden="true">
-                                <span class="theme-ball theme-ball-1"></span>
-                                <span class="theme-ball theme-ball-2"></span>
-                                <span class="theme-ball theme-ball-3"></span>
-                                <span class="theme-ball theme-ball-4"></span>
-                            </span>
-                            <span class="theme-info">
-                                <span class="theme-tag">BOUNCE</span>
-                                <span class="theme-name">로또</span>
-                                <p class="theme-desc">공이 튀어나오는 연출</p>
-                            </span>
-                            <span class="theme-selected-sticker" aria-hidden="true">ON STAGE</span>
-                        </button>
+                    <button type="button" class="theme-card" data-theme="lottery" role="radio" aria-checked="false">
+                        <span class="theme-graphic theme-graphic-lottery" aria-hidden="true">
+                            <span class="theme-ball theme-ball-1"></span>
+                            <span class="theme-ball theme-ball-2"></span>
+                            <span class="theme-ball theme-ball-3"></span>
+                        </span>
+                        <span class="theme-info">
+                            <span class="theme-name">로또</span>
+                            <p class="theme-desc">공이 튀어나오는 연출</p>
+                        </span>
+                    </button>
 
-                        <button type="button" class="theme-card" data-theme="fishing" role="radio" aria-checked="false">
-                            <span class="theme-graphic theme-graphic-fishing" aria-hidden="true">
-                                <span class="theme-wave"></span>
-                                <span class="theme-hook"></span>
-                            </span>
-                            <span class="theme-info">
-                                <span class="theme-tag">CATCH</span>
-                                <span class="theme-name">낚시</span>
-                                <p class="theme-desc">낚시로 학생 선발</p>
-                            </span>
-                            <span class="theme-selected-sticker" aria-hidden="true">ON STAGE</span>
-                        </button>
-                    </div>
-
-                    <!-- Stage preview -->
-                    <aside class="stage-preview" aria-label="발표 스테이지 미리보기">
-                        <header class="preview-head">
-                            <span class="preview-kicker">STAGE PREVIEW</span>
-                            <h3 class="preview-title">Ready to pick</h3>
-                            <p class="preview-meta">선발 시작 버튼을 누르면 무대가 열립니다</p>
-                        </header>
-
-                        <div class="preview-body" aria-hidden="true">
-                            <span class="preview-spotlight"></span>
-                            <span class="preview-grid"></span>
-                            <div class="preview-chips">
-                                <span class="preview-chip" style="--i:0">민지</span>
-                                <span class="preview-chip" style="--i:1">서연</span>
-                                <span class="preview-chip" style="--i:2">도윤</span>
-                                <span class="preview-chip" style="--i:3">하준</span>
-                                <span class="preview-chip" style="--i:4">유나</span>
-                                <span class="preview-chip" style="--i:5">지호</span>
-                                <span class="preview-chip preview-chip-winner" style="--i:6">★ 발표자</span>
-                            </div>
-                        </div>
-
-                        <footer class="preview-foot">
-                            <span class="preview-foot-dot"></span>
-                            <span class="preview-foot-text">Press start to open the stage</span>
-                        </footer>
-                    </aside>
+                    <button type="button" class="theme-card" data-theme="fishing" role="radio" aria-checked="false">
+                        <span class="theme-graphic theme-graphic-fishing" aria-hidden="true">
+                            <span class="theme-wave"></span>
+                            <span class="theme-hook"></span>
+                        </span>
+                        <span class="theme-info">
+                            <span class="theme-name">낚시</span>
+                            <p class="theme-desc">낚시로 학생 선발</p>
+                        </span>
+                    </button>
                 </div>
 
                 <div class="step-navigation">
                     <button class="nav-btn back-btn" id="step3Back" aria-label="이전 단계">
-                        <span>←</span> 이전
+                        <span aria-hidden="true">←</span> 이전
                     </button>
-                    <button class="capsule-cta start-btn" id="startBtn" aria-label="선발 시작">
-                        <span class="capsule-cta-sparkle capsule-cta-sparkle-1" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3 L14 10 L21 12 L14 14 L12 21 L10 14 L3 12 L10 10 Z"/></svg>
-                        </span>
-                        <span class="capsule-cta-sparkle capsule-cta-sparkle-2" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3 L14 10 L21 12 L14 14 L12 21 L10 14 L3 12 L10 10 Z"/></svg>
-                        </span>
-                        <span class="capsule-cta-inner">
-                            <span class="capsule-cta-sub">OPEN THE STAGE</span>
-                            <span class="capsule-cta-label">선발 시작</span>
-                        </span>
-                        <span class="capsule-cta-arrow" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M5 12 H19 M13 6 L19 12 L13 18"/>
-                            </svg>
-                        </span>
+                    <button class="nav-btn start-btn" id="startBtn" aria-label="선발 시작">
+                        선발 시작
                     </button>
                 </div>
             </div>
 
         </main>
 
-        <!-- =========================================================
-             RESULT — Winner board (별도 영역)
-        ========================================================= -->
+        <!-- 결과 화면 (별도, 결과 모드에서 body가 어두워짐) -->
         <div class="step-container winner-board-container" id="stepResult" style="display: none;">
             <section class="winner-board">
                 <header class="winner-board-header">
-                    <span class="board-kicker" aria-hidden="true">TODAY'S PICK</span>
                     <h2 tabindex="-1" id="resultTitle">선발 결과</h2>
                 </header>
 
@@ -464,15 +326,8 @@
                 <div class="result-actions">
                     <button id="continuePickBtn" class="action-btn primary-action" aria-label="계속 선발하기 - 이미 뽑힌 학생 제외">
                         계속 선발하기
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M5 12 H19 M13 6 L19 12 L13 18"/>
-                        </svg>
                     </button>
                     <button id="saveResultBtn" class="action-btn secondary-action" aria-label="결과 저장">
-                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M8 2 V11 M4 7 L8 11 L12 7"/>
-                            <path d="M2 13.5 H14"/>
-                        </svg>
                         결과 저장
                     </button>
                     <button id="resetSettingsBtn" class="action-btn secondary-action" aria-label="다시 설정하고 선발 - 전체 명단으로 재시작">
@@ -491,9 +346,7 @@
 
     </div><!-- /.app-shell -->
 
-    <!-- =========================================================
-         FULLSCREEN PRESENTATION MODE
-    ========================================================= -->
+    <!-- 전체 화면 선발 모드 -->
     <div id="animationContainer" class="animation-container" style="display: none;">
         <canvas id="threeCanvas"></canvas>
         <div class="animation-overlay">
@@ -509,10 +362,9 @@
         </div>
     </div>
 
-    <!-- Pause overlay -->
+    <!-- 일시정지 오버레이 -->
     <div id="pauseMenu" class="pause-menu" style="display: none;">
         <div class="pause-content">
-            <span class="pause-kicker">PAUSED</span>
             <h2>일시 중지</h2>
             <p>선발을 중지했습니다</p>
             <div class="pause-actions">
