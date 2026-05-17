@@ -41,7 +41,7 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
         // ── Three.js 셋업 ──────────────────────────────────
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x03050D);
-        scene.fog = new THREE.Fog(0x03050D, 16, 32);
+        scene.fog = new THREE.Fog(0x03050D, 20, 36);
 
         const camera = new THREE.PerspectiveCamera(
             45,
@@ -58,10 +58,17 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
         // ── 조명 — 신중하게, 네온 금지, 브래스톤 키 라이트 중심 ──
-        const ambient = new THREE.AmbientLight(0xffffff, 0.32);
+        // Ambient 는 낮추고 Hemisphere 가 위·아래 색 편향을 담당.
+        // 플라스틱 clearcoat 의 dome highlight 가 직접광에서 잘 보이도록 키를 약간 올림.
+        const ambient = new THREE.AmbientLight(0xffffff, 0.18);
         scene.add(ambient);
 
-        const keyLight = new THREE.DirectionalLight(0xfff0d0, 1.0);
+        // 위는 차가운 빛, 아래는 따뜻한 반사 — 단색 컬러볼이 자연스럽게 떠 보임
+        const hemiLight = new THREE.HemisphereLight(0xb8c5dd, 0x3a2e1f, 0.28);
+        hemiLight.position.set(0, 1, 0);
+        scene.add(hemiLight);
+
+        const keyLight = new THREE.DirectionalLight(0xfff0d0, 1.15);
         keyLight.position.set(1.5, 8, 6);
         keyLight.castShadow = true;
         keyLight.shadow.mapSize.set(1024, 1024);
@@ -69,7 +76,7 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
         keyLight.shadow.camera.far = 30;
         scene.add(keyLight);
 
-        const fillLight = new THREE.DirectionalLight(0xa0c0ff, 0.28);
+        const fillLight = new THREE.DirectionalLight(0xa0c0ff, 0.22);
         fillLight.position.set(-6, 2, 4);
         scene.add(fillLight);
 
@@ -184,17 +191,22 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
         scene.add(floor);
 
         // ── 공들 — 단색, 완전 구형 (squash/stretch 절대 금지) ──
+        // 표면 텍스처·번호·이름·반반 색·CanvasTexture 일체 사용하지 않는다.
+        // 매끈한 플라스틱 로또볼: MeshPhysicalMaterial + clearcoat 로
+        // 베이스 컬러 위 lacquer 층의 dome highlight 표현. emissive 는
+        // baseline 0 (자체 발광 금지) — winner launch 시점에만 약하게 사용.
         const balls = [];
-        const ballGeom = new THREE.SphereGeometry(BALL_R, 32, 24);
+        const ballGeom = new THREE.SphereGeometry(BALL_R, 48, 32);
 
         for (let i = 0; i < TOTAL_BALLS; i++) {
             const palette = BALL_PALETTE[i % BALL_PALETTE.length];
-            const mat = new THREE.MeshStandardMaterial({
+            const mat = new THREE.MeshPhysicalMaterial({
                 color: palette.core,
-                roughness: 0.42,
-                metalness: 0.08,
-                emissive: palette.core,
-                emissiveIntensity: 0.04,
+                roughness: 0.28,
+                metalness: 0.0,
+                clearcoat: 0.8,
+                clearcoatRoughness: 0.12,
+                reflectivity: 0.5,
             });
             const ball = new THREE.Mesh(ballGeom, mat);
             ball.castShadow = true;
@@ -646,7 +658,13 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
             // 균등 스케일 1.0 → 1.5 — squash/stretch 금지, setScalar 만
             currentWinner.scale.setScalar(1.0 + 0.5 * eased);
             currentWinner.rotation.y += dt * 1.2;
-            currentWinner.material.emissiveIntensity = 0.04 + 0.22 * eased;
+            // winner 강조용 emissive — material 은 ball 마다 독립 인스턴스라
+            // 다른 공으로 누출되지 않음. 첫 frame 에 색 한 번 설정 후
+            // intensity 는 0 → 0.18 로만 램프 (과한 자체 발광 방지).
+            if (ud.launchT - dt <= 0) {
+                currentWinner.material.emissive.setHex(ud.palette.core);
+            }
+            currentWinner.material.emissiveIntensity = 0.18 * eased;
             return t >= 1;
         }
 
