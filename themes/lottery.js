@@ -323,27 +323,42 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
             <rect x="100" y="696" width="1080" height="2" rx="1" fill="rgba(255,255,255,.55)"/>
         `;
 
-        // ── 고양이 마스코트 이미지 (assets/lotto-cat-mascot.png)
-        // 로또 기계 왼쪽에 배치되는 정적 장식. transparent PNG.
-        // 이미지 로드 실패 시 표시하지 않고 흐름은 유지된다.
+        // ── 고양이 마스코트 (assets/lotto-cat-grey.png)
+        // wrapper 가 위치/크기/idle bob 을, img 가 실제 PNG 를,
+        // eye span 두 개가 깜빡임 overlay 를 담당한다. transparent PNG.
+        // 이미지 로드 실패 시 wrapper 째 제거 — 로또 흐름은 정상 유지.
         // alt="" + aria-hidden 으로 decorative 처리.
+        const catWrap = document.createElement('div');
+        catWrap.className = 'lottery-cat-mascot';
+        catWrap.setAttribute('aria-hidden', 'true');
+        catWrap.style.opacity = '0';
+
         const catImg = document.createElement('img');
         catImg.className = 'lottery-cat-img';
-        catImg.src = 'assets/lotto-cat-mascot.png';
+        catImg.src = 'assets/lotto-cat-grey.png';
         catImg.alt = '';
         catImg.setAttribute('aria-hidden', 'true');
         catImg.draggable = false;
-        catImg.style.opacity = '0';
+
+        const catEyeL = document.createElement('span');
+        catEyeL.className = 'lottery-cat-eye lottery-cat-eye--left';
+        const catEyeR = document.createElement('span');
+        catEyeR.className = 'lottery-cat-eye lottery-cat-eye--right';
+
         catImg.addEventListener('load', () => {
             if (isDisposed) return;
-            catImg.style.opacity = '';
+            catWrap.style.opacity = '';
         });
         catImg.addEventListener('error', () => {
-            if (catImg.parentElement) catImg.parentElement.removeChild(catImg);
+            if (catWrap.parentElement) catWrap.parentElement.removeChild(catWrap);
         });
 
+        catWrap.appendChild(catImg);
+        catWrap.appendChild(catEyeL);
+        catWrap.appendChild(catEyeR);
+
         stage.appendChild(boothSvg);
-        stage.appendChild(catImg);
+        stage.appendChild(catWrap);
 
         // ── 공 컨테이너 (글로브 중심 좌표에 0×0 앵커)
         // 각 공의 transform 은 globe-center 기준 상대 좌표. SVG viewBox 와 같은
