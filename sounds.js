@@ -451,99 +451,98 @@ class SoundManager {
                         filterFreq: 600, filterFreqTo: 2400, filterQ: 0.7 });
     }
 
-    // 회전 중 tension bed — 138 BPM 캐주얼 게임 텐션 BGM (4 레이어 단일 핸들).
-    // 라우팅: 모든 node → spinGain → masterGain. stop() 시 spinGain 페이드.
-    // 카지노 슬롯 회피: 코인 jingle / sustained 5도 코드 / arpeggio 없음.
-    // tick 1800Hz triangle (playRouletteTick) 과 frequency 캐릭터 분리:
-    //   hum 80/160Hz lowpass 280 → 저음대 / kick 70Hz / bass A2=110Hz / hat 6500Hz+ highpass
-    //   → mid 1000~3500Hz 비워둠 → segment tick 또렷이 들림.
-    //   Layer 1: hum — sawtooth 80 + sine 160 (gain 0.06, 약간 옅게)
-    //   Layer 2: kick — 4-on-the-floor 70→50Hz triangle (peak 0.14)
-    //   Layer 3: closed hat — 8분 grid highpass noise (peak 0.045)
-    //   Layer 4: bass — A2=110Hz 4분 grid sine pulse (peak 0.09, minor key tension)
-    // BPM 138 / 16분음표 step ≈ 108.7ms
+    // 회전 중 arcade spin BGM — 140 BPM 밝은 캐주얼 게임 BGM (5 레이어 단일 핸들).
+    // 라우팅: 모든 노드 → spinGain → masterGain. stop() 시 spinGain 60ms 페이드 →
+    // 미래에 예약된 osc 도 출력 경로가 muted 라 silent.
+    // 키 C major. 4-bar 코드 진행: C – G – Am – F (I–V–vi–IV). 단조 drone / sustained hum 없음.
+    //   Layer 1: kick — 4-on-the-floor 70→50Hz triangle (peak 0.15)
+    //   Layer 2: clap — beats 2 & 4 bandpass-noise 1800Hz (peak 0.08, 마디당 2회만)
+    //   Layer 3: shaker — 8분 offbeats highpass 7000Hz noise (peak 0.04)
+    //   Layer 4: synth bass — quarter grid 코드 root C2/G2/A2/F2 triangle (peak 0.12)
+    //   Layer 5: 8-bit lead pluck — quarter grid 코드톤 4음/마디 sine + 2× harmonic (peak 0.075 + 0.025)
+    // BPM 140 / 16분음표 step ≈ 107.1ms / 한 마디 16 step / 4-bar 루프 64 step
+    // tick (1800Hz triangle, peak 0.22~0.30) 와의 충돌 방지 — 대역 분리:
+    //   kick<240Hz / bass<550Hz / lead 500~1050Hz fundamental / shaker>7000Hz
+    //   → 1500~3500Hz tick 대역 비움. clap 만 1800Hz 와 겹치지만 peak 0.08 (tick 의 1/3) +
+    //   마디당 2회만 발화라 tick 항상 위에서 들림.
     startRouletteSpinBed() {
         if (!this.initialized) return null;
-        const state = {
-            stopped: false, scheduler: null,
-            spinGain: null, humOsc1: null, humOsc2: null, humG2: null, humFilter: null,
-        };
+        const state = { stopped: false, scheduler: null, spinGain: null };
 
-        // 전용 spinGain — stop() 시 페이드용
+        // 전용 spinGain — stop() 시 페이드용. 1.0 base, 각 레이어 peak 가 실제 레벨.
         const spinGain = this.audioContext.createGain();
-        spinGain.gain.value = 0.0001;
+        spinGain.gain.value = 1;
         spinGain.connect(this.masterGain);
         state.spinGain = spinGain;
 
-        // Layer 1 — rotating hum (sawtooth 80Hz + sine 160Hz)
-        try {
-            const t = this._now();
-            const humOsc1 = this.audioContext.createOscillator();
-            const humOsc2 = this.audioContext.createOscillator();
-            const humG2 = this.audioContext.createGain();
-            const humFilter = this.audioContext.createBiquadFilter();
-            humFilter.type = 'lowpass';
-            humFilter.frequency.value = 280;
-            humFilter.Q.value = 0.8;
-            humOsc1.type = 'sawtooth'; humOsc1.frequency.value = 80;
-            humOsc2.type = 'sine';     humOsc2.frequency.value = 160;
-            humG2.gain.value = 0.30;
-            humOsc1.connect(humFilter);
-            humOsc2.connect(humG2); humG2.connect(humFilter);
-            humFilter.connect(spinGain);
-            humOsc1.start(t); humOsc2.start(t);
-            state.humOsc1 = humOsc1;
-            state.humOsc2 = humOsc2;
-            state.humG2 = humG2;
-            state.humFilter = humFilter;
-        } catch (e) {}
-
-        // spinGain 부드러운 페이드 인 (clicky attack 회피)
-        try {
-            const t = this._now();
-            spinGain.gain.cancelScheduledValues(t);
-            spinGain.gain.setValueAtTime(0.0001, t);
-            spinGain.gain.exponentialRampToValueAtTime(0.10, t + 0.10);
-        } catch (e) {}
-
-        // Layers 2~4 — 138 BPM 16-step grid
-        // BASS A2 4분 grid — minor 단조 root pulse (tension)
-        const BASS = [
-            110.00, 0, 0, 0,
-            110.00, 0, 0, 0,
-            110.00, 0, 0, 0,
-            110.00, 0, 0, 0,
+        // 마디별 bass root — C major 진행 (C2 / G2 / A2 / F2)
+        const BAR_BASS = [65.41, 98.00, 110.00, 87.31];
+        // 마디별 lead 16-step pattern — 코드톤 4음/마디 (root, mid, top, mid), 4분 grid
+        const LEAD = [
+            // bar 1: C  → E5 G5 C6 G5
+            [659.25, 0, 0, 0, 783.99, 0, 0, 0, 1046.50, 0, 0, 0, 783.99, 0, 0, 0],
+            // bar 2: G  → D5 G5 B5 G5
+            [587.33, 0, 0, 0, 783.99, 0, 0, 0,  987.77, 0, 0, 0, 783.99, 0, 0, 0],
+            // bar 3: Am → E5 A5 C6 A5
+            [659.25, 0, 0, 0, 880.00, 0, 0, 0, 1046.50, 0, 0, 0, 880.00, 0, 0, 0],
+            // bar 4: F  → C5 F5 A5 F5
+            [523.25, 0, 0, 0, 698.46, 0, 0, 0,  880.00, 0, 0, 0, 698.46, 0, 0, 0],
         ];
 
         state.scheduler = this._makeLoopScheduler({
-            bpm: 138,
+            bpm: 140,
             stepsPerBeat: 4,
             onStep: (idx, when) => {
+                const bar = Math.floor(idx / 16) % 4;
                 const s = idx % 16;
                 // Kick — 4-on-the-floor
                 if (s === 0 || s === 4 || s === 8 || s === 12) {
                     this._oneShot({
                         when, type: 'triangle', freq: 70, freqTo: 50, dur: 0.09,
-                        peak: 0.14, attack: 0.003,
+                        peak: 0.15, attack: 0.003,
                         filterType: 'lowpass', filterFreq: 240, filterQ: 0.7,
                         outputNode: spinGain,
                     });
                 }
-                // Closed hat — 8분 grid (driving). highpass 6500+ → tick 1800Hz 충돌 회피
-                if (s % 2 === 0) {
+                // Clap — beats 2 & 4 (마디당 2회만 → tick 1800Hz 충돌 최소)
+                if (s === 4 || s === 12) {
                     this._noiseBurst({
-                        when, dur: 0.022,
-                        filterType: 'highpass', filterFreq: 6500, filterQ: 0.6,
-                        peak: 0.045, outputNode: spinGain,
+                        when, dur: 0.045,
+                        filterType: 'bandpass', filterFreq: 1800, filterQ: 1.4,
+                        peak: 0.08, outputNode: spinGain,
                     });
                 }
-                // Bass pulse — quarter root (A2)
-                const bf = BASS[s];
-                if (bf > 0) {
+                // Shaker — 8분 offbeats. highpass 7000+ → tick 대역 완전 분리
+                if (s === 2 || s === 6 || s === 10 || s === 14) {
+                    this._noiseBurst({
+                        when, dur: 0.022,
+                        filterType: 'highpass', filterFreq: 7000, filterQ: 0.6,
+                        peak: 0.04, outputNode: spinGain,
+                    });
+                }
+                // Synth bass — quarter grid 의 코드 root
+                const bf = BAR_BASS[bar];
+                if (s === 0 || s === 4 || s === 8 || s === 12) {
                     this._oneShot({
-                        when, type: 'sine', freq: bf, dur: 0.14,
-                        peak: 0.09, attack: 0.004,
-                        filterType: 'lowpass', filterFreq: 600, filterQ: 0.7,
+                        when, type: 'triangle', freq: bf, dur: 0.18,
+                        peak: 0.12, attack: 0.004,
+                        filterType: 'lowpass',
+                        filterFreq: Math.max(500, bf * 5), filterQ: 0.7,
+                        outputNode: spinGain,
+                    });
+                }
+                // 8-bit lead pluck (+ 2× harmonic sparkle)
+                const lf = LEAD[bar][s];
+                if (lf > 0) {
+                    this._oneShot({
+                        when, type: 'sine', freq: lf, dur: 0.14,
+                        peak: 0.075, attack: 0.003,
+                        filterType: 'lowpass', filterFreq: lf * 4, filterQ: 0.6,
+                        outputNode: spinGain,
+                    });
+                    this._oneShot({
+                        when, type: 'sine', freq: lf * 2, dur: 0.10,
+                        peak: 0.025, attack: 0.003,
                         outputNode: spinGain,
                     });
                 }
@@ -556,7 +555,7 @@ class SoundManager {
                 state.stopped = true;
                 this._stopLoopScheduler(state.scheduler);
                 state.scheduler = null;
-                // spinGain 60ms 페이드 → hum / in-flight + 미래 예약 step 모두 silent
+                // spinGain 60ms 페이드 → in-flight + 미래 예약 osc 모두 silent
                 if (state.spinGain) {
                     const sg = state.spinGain;
                     try {
@@ -565,20 +564,10 @@ class SoundManager {
                         sg.gain.setValueAtTime(sg.gain.value, t);
                         sg.gain.linearRampToValueAtTime(0.0001, t + 0.06);
                     } catch (e) {}
-                    try {
-                        const t = this._now();
-                        if (state.humOsc1) state.humOsc1.stop(t + 0.08);
-                        if (state.humOsc2) state.humOsc2.stop(t + 0.08);
-                    } catch (e) {}
                     setTimeout(() => {
-                        try { if (state.humOsc1) state.humOsc1.disconnect(); } catch (e) {}
-                        try { if (state.humOsc2) state.humOsc2.disconnect(); } catch (e) {}
-                        try { if (state.humG2) state.humG2.disconnect(); } catch (e) {}
-                        try { if (state.humFilter) state.humFilter.disconnect(); } catch (e) {}
                         try { sg.disconnect(); } catch (e) {}
-                        state.humOsc1 = state.humOsc2 = state.humG2 = state.humFilter = null;
-                        state.spinGain = null;
                     }, 200);
+                    state.spinGain = null;
                 }
             }
         };
