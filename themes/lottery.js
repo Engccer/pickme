@@ -321,104 +321,27 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
             <rect x="100" y="696" width="1080" height="2" rx="1" fill="rgba(255,255,255,.55)"/>
         `;
 
-        // ── 고양이 마스코트 SVG (별도 layer — 단순화 버전, PICKER 라벨 없음)
-        // 시안 대비: 수염 6→4, catchlight 4→2, 입 ω→U자, 페디스털 라벨 제거,
-        // 트로피 ★ 제거, blush/큰 눈/꼬리/raised paw 는 유지 (귀여움 핵심).
-        const catSvg = document.createElementNS(bgSvgNS, 'svg');
-        catSvg.setAttribute('class', 'lottery-cat-svg');
-        catSvg.setAttribute('viewBox', '0 0 1280 800');
-        catSvg.setAttribute('preserveAspectRatio', 'xMidYMid slice');
-        catSvg.innerHTML = `
-            <defs>
-                <linearGradient id="lo-cat-wood" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stop-color="#E0AC75"/>
-                    <stop offset="60%" stop-color="#C18548"/>
-                    <stop offset="100%" stop-color="#9B6B3A"/>
-                </linearGradient>
-                <radialGradient id="lo-cat-trophy" cx="0.35" cy="0.3" r="0.75">
-                    <stop offset="0%"  stop-color="#FFD3C2"/>
-                    <stop offset="48%" stop-color="#FF8E72"/>
-                    <stop offset="100%" stop-color="#C95E45"/>
-                </radialGradient>
-            </defs>
-            <g transform="translate(420 ${GLOBE_CY + 200})">
-                <!-- 페디스털 (PICKER 라벨 제거, 단순 wood block) -->
-                <g>
-                    <ellipse cx="0" cy="44" rx="56" ry="8" fill="rgba(60,40,20,.3)"/>
-                    <rect x="-52" y="4" width="104" height="40" rx="10" fill="url(#lo-cat-wood)" stroke="#9B6B3A" stroke-width="1.2"/>
-                    <rect x="-48" y="8" width="96" height="3" rx="1.5" fill="rgba(255,255,255,.4)"/>
-                    <circle cx="-40" cy="30" r="2.8" fill="#FFE9A8" stroke="#9B6B3A" stroke-width="0.6"/>
-                    <circle cx="40" cy="30" r="2.8" fill="#FFE9A8" stroke="#9B6B3A" stroke-width="0.6"/>
-                </g>
-
-                <!-- 고양이 본체 — y 0 기준 위로 올라감 -->
-                <g transform="translate(0 -52)">
-                    <!-- 꼬리 -->
-                    <path d="M -2 -6 Q -42 -28 -34 -76 Q -26 -102 -10 -98"
-                        stroke="#FFCC4F" stroke-width="20" fill="none" stroke-linecap="round"/>
-                    <circle cx="-10" cy="-98" r="4.5" fill="#FFE9A8" stroke="#C99320" stroke-width="1.2"/>
-
-                    <!-- 몸 -->
-                    <ellipse cx="0" cy="4" rx="50" ry="46" fill="#FFCC4F" stroke="#C99320" stroke-width="2.4"/>
-                    <ellipse cx="0" cy="18" rx="26" ry="26" fill="#FFE9A8" opacity="0.55"/>
-
-                    <!-- 좌측 발 (배 위에 얹은) -->
-                    <ellipse cx="-28" cy="14" rx="12" ry="20" fill="#FFCC4F" stroke="#C99320" stroke-width="2.4"/>
-                    <ellipse cx="-28" cy="30" rx="13" ry="9" fill="#FFCC4F" stroke="#C99320" stroke-width="2.4"/>
-
-                    <!-- 우측 발 (raised, 트로피 공) -->
-                    <g transform="translate(44 -22) rotate(-14)">
-                        <ellipse cx="0" cy="0" rx="12" ry="26" fill="#FFCC4F" stroke="#C99320" stroke-width="2.4"/>
-                        <ellipse cx="0" cy="-24" rx="14" ry="11" fill="#FFCC4F" stroke="#C99320" stroke-width="2.4"/>
-                    </g>
-
-                    <!-- 트로피 공 (★ 제거, 단순 sphere) -->
-                    <g transform="translate(54 -54)">
-                        <circle r="18" fill="url(#lo-cat-trophy)"/>
-                        <ellipse cx="-6" cy="-8" rx="4.5" ry="3" fill="rgba(255,255,255,.7)"/>
-                    </g>
-
-                    <!-- 머리 -->
-                    <g transform="translate(0 -54)">
-                        <!-- 귀 -->
-                        <path d="M -28 -8 L -36 -32 L -14 -16 Z"
-                            fill="#FFCC4F" stroke="#C99320" stroke-width="2.4" stroke-linejoin="round"/>
-                        <path d="M -24 -14 L -30 -28 L -16 -20 Z" fill="#FFB39B"/>
-                        <path d="M 28 -8 L 36 -32 L 14 -16 Z"
-                            fill="#FFCC4F" stroke="#C99320" stroke-width="2.4" stroke-linejoin="round"/>
-                        <path d="M 24 -14 L 30 -28 L 16 -20 Z" fill="#FFB39B"/>
-
-                        <!-- 얼굴 -->
-                        <ellipse cx="0" cy="0" rx="40" ry="32" fill="#FFCC4F" stroke="#C99320" stroke-width="2.4"/>
-
-                        <!-- 볼터치 -->
-                        <ellipse cx="-24" cy="9" rx="6.5" ry="3.5" fill="#FF8E72" opacity="0.65"/>
-                        <ellipse cx="24" cy="9" rx="6.5" ry="3.5" fill="#FF8E72" opacity="0.65"/>
-
-                        <!-- 눈 (점눈 + catchlight 1개씩) -->
-                        <ellipse cx="-12" cy="-2" rx="5.5" ry="7.5" fill="#2A2A3C"/>
-                        <ellipse cx="12" cy="-2" rx="5.5" ry="7.5" fill="#2A2A3C"/>
-                        <ellipse cx="-10" cy="-5" rx="2.2" ry="2.6" fill="#FFFFFF"/>
-                        <ellipse cx="14" cy="-5" rx="2.2" ry="2.6" fill="#FFFFFF"/>
-
-                        <!-- 코 -->
-                        <path d="M -3 8 L 3 8 L 0 12 Z" fill="#2A2A3C"/>
-
-                        <!-- 입 (단순 U자 1획) -->
-                        <path d="M -5 14 Q 0 18 5 14" stroke="#2A2A3C" stroke-width="2" fill="none" stroke-linecap="round"/>
-
-                        <!-- 수염 (양옆 2개씩, 단순) -->
-                        <line x1="-14" y1="8" x2="-38" y2="4" stroke="#C95E45" stroke-width="2" stroke-linecap="round"/>
-                        <line x1="-14" y1="14" x2="-38" y2="16" stroke="#C95E45" stroke-width="2" stroke-linecap="round"/>
-                        <line x1="14" y1="8" x2="38" y2="4" stroke="#C95E45" stroke-width="2" stroke-linecap="round"/>
-                        <line x1="14" y1="14" x2="38" y2="16" stroke="#C95E45" stroke-width="2" stroke-linecap="round"/>
-                    </g>
-                </g>
-            </g>
-        `;
+        // ── 고양이 마스코트 이미지 (assets/lotto-cat-mascot.png)
+        // 로또 기계 왼쪽에 배치되는 정적 장식. transparent PNG.
+        // 이미지 로드 실패 시 표시하지 않고 흐름은 유지된다.
+        // alt="" + aria-hidden 으로 decorative 처리.
+        const catImg = document.createElement('img');
+        catImg.className = 'lottery-cat-img';
+        catImg.src = 'assets/lotto-cat-mascot.png';
+        catImg.alt = '';
+        catImg.setAttribute('aria-hidden', 'true');
+        catImg.draggable = false;
+        catImg.style.opacity = '0';
+        catImg.addEventListener('load', () => {
+            if (isDisposed) return;
+            catImg.style.opacity = '';
+        });
+        catImg.addEventListener('error', () => {
+            if (catImg.parentElement) catImg.parentElement.removeChild(catImg);
+        });
 
         stage.appendChild(boothSvg);
-        stage.appendChild(catSvg);
+        stage.appendChild(catImg);
 
         // ── 공 컨테이너 (글로브 중심 좌표에 0×0 앵커)
         // 각 공의 transform 은 globe-center 기준 상대 좌표. SVG viewBox 와 같은
