@@ -2951,3 +2951,532 @@ a:focus-visible {
 
     .lottery-floor-pool { width: 60vw; height: 60px; bottom: 14%; }
 }
+
+/* =========================================================
+   Roulette theme — Broadcast Studio v2 (refined v3)
+   themes/roulette.js 가 .roulette-stage 컨테이너와 자식 DOM을
+   동적으로 만들었다 cleanup 에서 제거한다. SVG 휠은 viewport
+   기준으로 크게 그려지고, 작은 16:9 프레임 안에 가두지 않는다.
+   ========================================================= */
+
+/* 컨테이너 — 기존 분홍/보라 그라데이션 무효화하고 deep navy 무대
+   전체 viewport 채우기. */
+.animation-container.roulette-active.fullscreen-animation {
+    background: radial-gradient(ellipse at 50% 30%, #161B2E 0%, #0A0D1B 52%, #03050D 100%);
+}
+.animation-container.roulette-active.fullscreen-animation::after { display: none; }
+
+/* animation-message 시각 숨김 (HUD/reveal 패널이 대체) */
+.animation-container.roulette-active .animation-message { display: none; }
+
+/* picked-students-live — display:none 금지. sr-only 패턴으로 시각만 숨김,
+   aria-live announce 유지. */
+.animation-container.roulette-active .picked-students-live {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+/* ── stage ── */
+.roulette-stage {
+    /* 휠 크기 단위 — 모든 자식이 이 변수를 참조해 viewport 에 비례 배치 */
+    --wheel-svg-size: min(57vh, 88vw, 720px);
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 6;
+    color: #F4EFDF;
+    font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+}
+
+/* ── 분위기 — vignette + 키 라이트 콘 + 보조 콘 + floor pool + 모트 ── */
+.roulette-atmosphere {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+}
+.roulette-vignette {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(0, 0, 0, 0.55) 100%);
+}
+.roulette-key-cone {
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    width: min(720px, 90vw);
+    height: 88vh;
+    margin-left: calc(min(720px, 90vw) / -2);
+    background: linear-gradient(180deg, rgba(242, 211, 132, 0.22) 0%, rgba(242, 211, 132, 0.08) 35%, transparent 80%);
+    clip-path: polygon(44% 0%, 56% 0%, 100% 100%, 0% 100%);
+    filter: blur(2px);
+}
+.roulette-inner-cone {
+    position: absolute;
+    top: 40px;
+    left: 50%;
+    width: min(520px, 70vw);
+    height: 72vh;
+    margin-left: calc(min(520px, 70vw) / -2);
+    background: radial-gradient(ellipse at 50% 35%, rgba(242, 211, 132, 0.14) 0%, rgba(242, 211, 132, 0.05) 30%, transparent 60%);
+    filter: blur(8px);
+}
+.roulette-floor-pool {
+    position: absolute;
+    bottom: 84px;
+    left: 50%;
+    width: min(640px, 70vw);
+    height: 80px;
+    margin-left: calc(min(640px, 70vw) / -2);
+    background: radial-gradient(ellipse at center, rgba(242, 211, 132, 0.36) 0%, rgba(242, 211, 132, 0.08) 40%, transparent 75%);
+    filter: blur(18px);
+    opacity: 0.7;
+    transition: opacity 0.6s ease;
+    animation: roulette-floor 6s ease-in-out infinite;
+}
+.roulette-stage.dim .roulette-floor-pool { opacity: 1; }
+.roulette-mote {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(232, 202, 138, 0.72);
+    box-shadow: 0 0 6px rgba(232, 202, 138, 0.4);
+    filter: blur(0.5px);
+    opacity: 0;
+    animation: roulette-mote linear infinite;
+}
+@keyframes roulette-mote {
+    0%   { transform: translate(0, 0); opacity: 0; }
+    12%  { opacity: 0.7; }
+    88%  { opacity: 0.5; }
+    100% { transform: translate(var(--mx, 12px), -200px); opacity: 0; }
+}
+@keyframes roulette-floor {
+    0%, 100% { opacity: 0.55; }
+    50%      { opacity: 0.82; }
+}
+
+/* ── 상단 HUD (64px) ── */
+.roulette-hud {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 clamp(16px, 3vw, 40px);
+    box-sizing: border-box;
+    z-index: 50;
+}
+.roulette-hud::after {
+    content: '';
+    position: absolute;
+    left: clamp(16px, 3vw, 40px);
+    right: clamp(16px, 3vw, 40px);
+    bottom: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(232, 226, 210, 0.1), transparent);
+}
+.roulette-hud-left, .roulette-hud-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+/* HUD 좌측 작은 브랜드 마크는 허용 — 휠 중심부에는 P 없음 */
+.roulette-hud-mark {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: #F2D384;
+    background: linear-gradient(135deg, #2A2F40 0%, #161A28 100%);
+    border: 1px solid rgba(217, 178, 111, 0.4);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.roulette-hud-class {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+    color: #F4EFDF;
+}
+.roulette-hud-sub {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: rgba(232, 226, 210, 0.62);
+    letter-spacing: -0.1px;
+}
+.roulette-hud-label {
+    font-family: 'Manrope', 'Pretendard Variable', system-ui, sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    color: rgba(232, 226, 210, 0.6);
+}
+.roulette-hud-counter {
+    font-family: 'Manrope', 'Pretendard Variable', system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+    font-size: 20px;
+    font-weight: 600;
+    color: #F4EFDF;
+    display: inline-flex;
+    align-items: baseline;
+}
+.roulette-hud-divider { color: rgba(232, 226, 210, 0.4); margin: 0 1px; }
+.roulette-hud-total { color: rgba(232, 226, 210, 0.5); font-weight: 500; }
+.roulette-hud-bar {
+    display: flex;
+    gap: 4px;
+    margin-left: 6px;
+}
+.roulette-hud-bar-cell {
+    width: 16px;
+    height: 3px;
+    border-radius: 2px;
+    background: rgba(232, 226, 210, 0.14);
+    transition: background 0.4s ease, box-shadow 0.4s ease;
+}
+.roulette-hud-bar-cell.filled {
+    background: linear-gradient(90deg, #F2D384, #D9B26F);
+    box-shadow: 0 0 7px rgba(242, 211, 132, 0.45);
+}
+
+/* ── 휠 wrap — fullscreen viewport 중앙, 큰 크기 ── */
+.roulette-wheel-wrap {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: var(--wheel-svg-size);
+    height: var(--wheel-svg-size);
+    transform: translate(-50%, -50%);
+    z-index: 10;
+    pointer-events: none;
+    transition: opacity 0.6s ease;
+}
+.roulette-wheel-wrap.dim { opacity: 0.62; }
+.roulette-wheel-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    overflow: visible;
+}
+
+/* ── reveal — brass rail + finial + plate (포인터에서 연장되는 시각 연결) ── */
+.roulette-reveal-wrap {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 0;
+    height: 0;
+    z-index: 12;
+    pointer-events: none;
+}
+.roulette-reveal-rail {
+    position: absolute;
+    /* SVG y = -244 / 560 = -0.4357 of wheel size, from wheel center */
+    top: calc(var(--wheel-svg-size) * -0.4357);
+    left: 0;
+    width: calc(var(--wheel-svg-size) * 0.8393); /* 470/560 */
+    height: 1px;
+    background: linear-gradient(90deg, #F2D384 0%, #D9B26F 40%, #D9B26F 75%, transparent 100%);
+    box-shadow: 0 0 8px rgba(242, 211, 132, 0.45);
+    transform-origin: left center;
+    opacity: 0;
+}
+.roulette-reveal-wrap.show .roulette-reveal-rail {
+    animation: roulette-rail-in 0.5s cubic-bezier(0.4, 1.1, 0.5, 1) 0.05s both;
+}
+@keyframes roulette-rail-in {
+    from { opacity: 0; transform: scaleX(0); }
+    to   { opacity: 1; transform: scaleX(1); }
+}
+.roulette-reveal-finial {
+    position: absolute;
+    top: calc(var(--wheel-svg-size) * -0.4357);
+    left: calc(var(--wheel-svg-size) * 0.8393);
+    width: 8px;
+    height: 8px;
+    margin-left: -4px;
+    margin-top: -4px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #F2D384, #8A6E3B);
+    box-shadow: 0 0 8px rgba(242, 211, 132, 0.42);
+    opacity: 0;
+}
+.roulette-reveal-wrap.show .roulette-reveal-finial {
+    animation: roulette-finial-in 0.35s ease-out 0.25s both;
+}
+@keyframes roulette-finial-in {
+    from { opacity: 0; transform: scale(0); }
+    to   { opacity: 1; transform: scale(1); }
+}
+.roulette-reveal-panel {
+    position: absolute;
+    /* aligned with rail y, slightly inset from wheel right */
+    top: calc(var(--wheel-svg-size) * -0.4357);
+    left: calc(var(--wheel-svg-size) * 0.0571); /* 32/560 */
+    /* width 비례 + 텍스트 가독성 위해 min 보장 */
+    width: clamp(290px, calc(var(--wheel-svg-size) * 0.7679), 480px);
+    box-sizing: border-box;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+.roulette-reveal-wrap.show .roulette-reveal-panel {
+    visibility: visible;
+    animation: roulette-plate-in 0.55s cubic-bezier(0.3, 0.95, 0.4, 1) 0.15s both;
+}
+@keyframes roulette-plate-in {
+    0%   { opacity: 0; clip-path: inset(0 100% 0 0); transform: translate(8px, 0); }
+    100% { opacity: 1; clip-path: inset(0 0 0 0);    transform: translate(0, 0); }
+}
+.roulette-reveal-card {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+    min-height: 152px;
+    background: linear-gradient(180deg, rgba(28, 33, 54, 0.92) 0%, rgba(12, 15, 30, 0.97) 100%);
+    border-top: 1.5px solid #F2D384;
+    border-bottom: 1px solid rgba(138, 110, 59, 0.8);
+    box-shadow: 0 28px 56px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 40px rgba(242, 211, 132, 0.1);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+}
+.roulette-reveal-stripe {
+    width: 3px;
+    flex: 0 0 3px;
+    background: linear-gradient(180deg, #F2D384, #D9B26F);
+    box-shadow: 0 0 18px rgba(242, 211, 132, 0.55);
+}
+.roulette-reveal-body {
+    padding: 22px 26px 20px 26px;
+    flex: 1;
+    min-width: 0;
+}
+.roulette-reveal-eyebrow {
+    font-family: 'Manrope', 'Pretendard Variable', system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 2.4px;
+    color: #F2D384;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+}
+.roulette-reveal-name {
+    font-family: 'Pretendard Variable', Pretendard, sans-serif;
+    font-weight: 700;
+    font-size: clamp(2.2rem, 5.6vw, 3.4rem);
+    line-height: 1;
+    letter-spacing: -0.04em;
+    color: #FBF6E6;
+    margin-bottom: 10px;
+    text-shadow: 0 0 32px rgba(242, 211, 132, 0.2);
+    word-break: keep-all;
+}
+.roulette-reveal-sub {
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(232, 226, 210, 0.72);
+    letter-spacing: -0.1px;
+    min-height: 1.4em;
+}
+
+/* ── 하단 rail (72px) ── */
+.roulette-rail {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 72px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 clamp(16px, 3vw, 40px);
+    box-sizing: border-box;
+    z-index: 50;
+    gap: 16px;
+}
+.roulette-rail::before {
+    content: '';
+    position: absolute;
+    left: clamp(16px, 3vw, 40px);
+    right: clamp(16px, 3vw, 40px);
+    top: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(232, 226, 210, 0.07), transparent);
+}
+.roulette-rail-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 160px;
+}
+.roulette-rail-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(232, 226, 210, 0.4);
+    transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+.roulette-rail-dot[data-phase="spin"],
+.roulette-rail-dot[data-phase="decel"] {
+    background: #E89A2D;
+    box-shadow: 0 0 10px rgba(232, 154, 45, 0.6);
+    animation: roulette-dot-pulse 1.4s ease-in-out infinite;
+}
+.roulette-rail-dot[data-phase="stop"],
+.roulette-rail-dot[data-phase="reveal"] {
+    background: #F2D384;
+    box-shadow: 0 0 10px rgba(242, 211, 132, 0.55);
+    animation: roulette-dot-pulse 1.4s ease-in-out infinite;
+}
+.roulette-rail-dot[data-phase="gap"] {
+    background: rgba(232, 226, 210, 0.55);
+}
+.roulette-rail-dot[data-phase="finishing"] {
+    background: #D9B26F;
+    box-shadow: 0 0 10px rgba(217, 178, 111, 0.6);
+}
+@keyframes roulette-dot-pulse {
+    0%, 100% { opacity: 0.55; }
+    50%      { opacity: 1; }
+}
+.roulette-rail-status-text {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: rgba(232, 226, 210, 0.88);
+    letter-spacing: -0.1px;
+}
+.roulette-rail-chips {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    flex: 1;
+    justify-content: center;
+    min-width: 0;
+    overflow: hidden;
+}
+.roulette-rail-chips-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: rgba(232, 226, 210, 0.55);
+    letter-spacing: -0.05px;
+}
+.roulette-rail-chips-empty {
+    font-size: 11.5px;
+    color: rgba(232, 226, 210, 0.32);
+    font-style: italic;
+}
+.roulette-rail-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 12px;
+    background: rgba(232, 226, 210, 0.06);
+    border: 1px solid rgba(232, 226, 210, 0.13);
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(244, 239, 223, 0.92);
+    white-space: nowrap;
+}
+.roulette-rail-hint {
+    min-width: 140px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+}
+.roulette-rail-hint-text {
+    font-size: 11px;
+    color: rgba(232, 226, 210, 0.55);
+    letter-spacing: -0.05px;
+}
+
+/* ── 선발 완료 배너 (1.1초) ── */
+.roulette-finish-banner {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Pretendard Variable', Pretendard, sans-serif;
+    font-weight: 700;
+    font-size: clamp(2rem, 5vw, 3rem);
+    letter-spacing: -0.04em;
+    color: #FBF6E6;
+    padding: 22px 44px;
+    background: rgba(10, 13, 27, 0.7);
+    border-top: 1.5px solid #F2D384;
+    border-bottom: 1px solid rgba(138, 110, 59, 0.7);
+    box-shadow: 0 28px 56px rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    opacity: 0;
+    visibility: hidden;
+    z-index: 14;
+    pointer-events: none;
+    white-space: nowrap;
+}
+.roulette-finish-banner.show {
+    visibility: visible;
+    animation: roulette-finish-in 0.35s cubic-bezier(0.3, 0.95, 0.4, 1) both;
+}
+@keyframes roulette-finish-in {
+    0%   { opacity: 0; transform: translate(-50%, calc(-50% + 6px)); }
+    100% { opacity: 1; transform: translate(-50%, -50%); }
+}
+
+/* ── 반응형 — 좁은 화면에서 plate 는 휠 아래 중앙으로 ── */
+@media (max-width: 900px) {
+    .roulette-hud { height: 56px; padding: 0 14px; }
+    .roulette-hud-mark { width: 24px; height: 24px; font-size: 12px; }
+    .roulette-hud-class { font-size: 13.5px; }
+    .roulette-hud-sub { display: none; }
+    .roulette-hud-counter { font-size: 17px; }
+    .roulette-hud-bar { display: none; }
+
+    .roulette-rail { height: 64px; padding: 0 14px; gap: 10px; }
+    .roulette-rail-status { min-width: 100px; }
+    .roulette-rail-status-text { font-size: 11.5px; }
+    .roulette-rail-chips-label { display: none; }
+    .roulette-rail-hint { display: none; }
+    .roulette-rail-chip { padding: 4px 10px; font-size: 11.5px; }
+
+    /* 휠 아래 중앙으로 plate 이동 — 작은 화면에서 plate 가 viewport 밖
+       으로 튀어나가는 걸 방지. 시각 연결(rail)은 숨김. */
+    .roulette-reveal-wrap {
+        left: 50%;
+        top: auto;
+        bottom: 88px;
+        transform: translateX(-50%);
+        width: 100%;
+    }
+    .roulette-reveal-rail,
+    .roulette-reveal-finial { display: none; }
+    .roulette-reveal-panel {
+        position: relative;
+        top: auto;
+        left: 50%;
+        transform: translateX(-50%);
+        width: min(420px, calc(100vw - 32px));
+    }
+    .roulette-reveal-wrap.show .roulette-reveal-panel {
+        animation: roulette-plate-in-mobile 0.55s cubic-bezier(0.3, 0.95, 0.4, 1) 0.05s both;
+    }
+    @keyframes roulette-plate-in-mobile {
+        0%   { opacity: 0; transform: translate(-50%, 12px); }
+        100% { opacity: 1; transform: translate(-50%, 0); }
+    }
+
+    .roulette-floor-pool { display: none; }
+}
