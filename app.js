@@ -996,6 +996,9 @@ function pausePicking() {
     elements.pauseBtn.innerHTML = '일시 정지됨';
     elements.pauseBtn.setAttribute('aria-label', '일시 정지됨');
     elements.pauseBtn.disabled = true;
+
+    // 사운드 — masterGain 페이드 아웃 + loop 의 새 burst 생성 skip
+    if (soundManager.setPaused) soundManager.setPaused(true);
 }
 
 // 재개
@@ -1007,6 +1010,9 @@ function resumePicking() {
     elements.pauseBtn.innerHTML = '일시 정지';
     elements.pauseBtn.setAttribute('aria-label', '일시 정지');
     elements.pauseBtn.disabled = false;
+
+    // 사운드 — 사용자 master volume 으로 ramp up
+    if (soundManager.setPaused) soundManager.setPaused(false);
 
     // 애니메이션은 자동으로 재개됨
 }
@@ -1077,7 +1083,8 @@ function displayResults() {
         ? `남은 학생 ${remainingCount}명으로 추가 선발`
         : '선발 가능한 학생이 없습니다';
 
-    // 결과 화면 표시
+    // 결과 화면 표시 — 입력/설정/결과는 하나의 공통 neutral 앱 UI 로 통일.
+    // 테마별 강한 무드는 animationContainer 안에서만 적용된다.
     elements.steps[3].style.display = 'none';
     elements.steps[3].classList.remove('active');
     elements.resultSection.style.display = 'block';

@@ -103,7 +103,16 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
         let pauseStartT = null;
         let lastT = performance.now();
         let lastAngle = 0;
+        // 사운드 tick — 휠 angle 의 segment 통과를 감지해 click 사운드 재생.
+        // angle 자체는 read-only 로만 사용 (회전 결과 계산 미영향).
+        let lastSegIdx = 0;
+        let lastTickT = 0;
+        let prevAngleForTick = 0;
         let bgMusicStopped = false;
+        // 룰렛 spin bed — 회전 중 침묵 구간을 채우는 hum + soft pulse.
+        // transitionTo('spin') 진입 시 시작, transitionTo('stop') 진입 시 즉시 fade-out.
+        // cleanup() 안에서 safety stop (shouldStop / 강제 종료 대응).
+        let spinBedHandle = null;
         const usedSegments = new Set();
 
         // ── DOM 셋업
@@ -597,6 +606,18 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
                 };
                 setRailPhase('spin');
                 updateMessage(pickingMessage());
+                // 회전 시작 whoosh
+                if (typeof soundManager !== 'undefined' && soundManager.playRouletteSpinStart) {
+                    soundManager.playRouletteSpinStart();
+                }
+                // spin bed 시작 — gap → spin 빠른 전환 중복 누적 방지 가드
+                if (typeof soundManager !== 'undefined' && soundManager.startRouletteSpinBed) {
+                    if (spinBedHandle) {
+                        soundManager.stopSound(spinBedHandle);
+                        spinBedHandle = null;
+                    }
+                    spinBedHandle = soundManager.startRouletteSpinBed();
+                }
             } else if (newPhase === 'decel') {
                 const startA = angle;
                 const endA = targetAngleForSegment(startA, winnerIdx);
@@ -611,6 +632,17 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
                 trajectory = null;
                 highlightWinner(winnerIdx);
                 setRailPhase('stop');
+                // spin bed 즉시 fade-out — reveal 전에 silent 되도록
+                if (spinBedHandle) {
+                    if (typeof soundManager !== 'undefined' && soundManager.stopSound) {
+                        soundManager.stopSound(spinBedHandle);
+                    }
+                    spinBedHandle = null;
+                }
+                // 멈추는 순간 "탁"
+                if (typeof soundManager !== 'undefined' && soundManager.playRouletteStop) {
+                    soundManager.playRouletteStop();
+                }
             } else if (newPhase === 'reveal') {
                 const student = selectedStudents[currentPickIndex];
                 const col = SEG_COLORS[winnerIdx % SEG_COLORS.length];
@@ -627,8 +659,9 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
 
                 if (addPickedStudent) addPickedStudent(student);
                 addChip(student, winnerIdx);
-                if (typeof soundManager !== 'undefined' && soundManager.playLotteryPick) {
-                    soundManager.playLotteryPick();
+                // 이름 reveal — 밝은 chord (룰렛 전용)
+                if (typeof soundManager !== 'undefined' && soundManager.playRouletteReveal) {
+                    soundManager.playRouletteReveal();
                 }
 
                 currentPickIndex++;
@@ -749,6 +782,25 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
                 }
             }
 
+            // ── 사운드 tick — segment 통과 시 click. spin/decel 에서만, 최소 18ms 간격.
+            //    angle 은 read-only 로만 사용 (회전 결과 계산 미영향).
+            if (phase === 'spin' || phase === 'decel') {
+                const curSegIdx = Math.floor(angle / SEG_DEG);
+                if (curSegIdx !== lastSegIdx && (now - lastTickT) >= 18) {
+                    const vel = dt > 0 ? Math.abs((angle - prevAngleForTick) / dt) : 0;
+                    const intensity = Math.min(1, vel / SPIN_SPEED);
+                    if (typeof soundManager !== 'undefined' && soundManager.playRouletteTick) {
+                        soundManager.playRouletteTick(intensity);
+                    }
+                    lastTickT = now;
+                }
+                lastSegIdx = curSegIdx;
+            } else {
+                // reveal/gap/finishing 동안에는 idx 만 동기화 (다음 spin 시작 시 갑작스런 몰아치기 방지)
+                lastSegIdx = Math.floor(angle / SEG_DEG);
+            }
+            prevAngleForTick = angle;
+
             if (wheelRotatingGroup) {
                 wheelRotatingGroup.setAttribute('transform', `rotate(${angle.toFixed(3)})`);
             }
@@ -768,6 +820,13 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
             if (rafId !== null) {
                 cancelAnimationFrame(rafId);
                 rafId = null;
+            }
+            // spin bed safety stop — shouldStop / 강제 종료 시 잔류 0
+            if (spinBedHandle) {
+                if (typeof soundManager !== 'undefined' && soundManager.stopSound) {
+                    soundManager.stopSound(spinBedHandle);
+                }
+                spinBedHandle = null;
             }
             window.removeEventListener('resize', onWindowResize);
 

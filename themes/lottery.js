@@ -85,7 +85,9 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
             settle: 380,
             reveal: 1600,
             gap: 480,
-            finishHold: 1100,
+            // finishHold: 마지막 reveal 패널은 유지되고 finish ticket 이 그 위에 등장 —
+            // 두 종이 티켓이 한 화면에 자리잡을 시간을 위해 1.3초 (사용자 요구 범위 상한).
+            finishHold: 1300,
         };
 
         // ── 상태
@@ -467,10 +469,28 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
         `;
         stage.appendChild(rail);
 
-        // ── 선발 완료 배너
+        // ── 선발 완료 paper ticket — reveal card 와 동일한 디자인 시스템.
+        // twine + brass grommet + coral stripe + cream paper + soft shadow.
+        // 화면 정중앙 모달이 아니라 LOTTO 간판과 글로브 사이 빈 strip 에
+        // 핀으로 꽂힌 두 번째 종이 티켓처럼 보이도록 상단에 배치 (CSS).
         const finishBanner = document.createElement('div');
         finishBanner.className = 'lottery-finish-banner';
-        finishBanner.textContent = '선발 완료';
+        finishBanner.setAttribute('aria-hidden', 'true');
+        finishBanner.innerHTML = `
+            <svg class="lottery-finish-twine" viewBox="0 0 240 80" preserveAspectRatio="none">
+                <path d="M 2 10 Q 80 50 220 60" stroke="${AR.twine}" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-dasharray="3 2.4" opacity="0.9"/>
+            </svg>
+            <div class="lottery-finish-card">
+                <div class="lottery-finish-grommet"></div>
+                <div class="lottery-finish-grommet-hole"></div>
+                <div class="lottery-finish-stripe"></div>
+                <div class="lottery-finish-body">
+                    <div class="lottery-finish-eyebrow">ROUND <span class="lottery-finish-round">00 / 00</span></div>
+                    <div class="lottery-finish-name">선발 완료</div>
+                    <div class="lottery-finish-sub"></div>
+                </div>
+            </div>
+        `;
         stage.appendChild(finishBanner);
 
         // 마운트
@@ -488,6 +508,9 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
         const railStatusText = rail.querySelector('.lottery-rail-status-text');
         const railChipsContainer = rail.querySelector('.lottery-rail-chips');
         const railChipsEmpty = rail.querySelector('.lottery-rail-chips-empty');
+        const railHintTextEl = rail.querySelector('.lottery-rail-hint-text');
+        const finishRoundEl = finishBanner.querySelector('.lottery-finish-round');
+        const finishSubEl = finishBanner.querySelector('.lottery-finish-sub');
 
         // 기존 .animation-message — 시각적으로 숨김 (CSS) 이지만
         // pickingMessage() 호출은 그대로 유지 (Math.min clamp 흐름 보존)
@@ -576,16 +599,43 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
 
         function positionRevealPanel() {
             const tray = getTrayBallScreenPos();
-            // 데스크탑: 트레이 우측 상단, 모바일: 트레이 위 중앙
+            // 기본 anchor: 트레이/배출 공 기준 (데스크탑은 트레이 오른쪽, 모바일은 트레이 위 중앙)
+            // viewport 안에 항상 머물도록 vertical clamp + (데스크탑) horizontal clamp.
             const isMobile = window.innerWidth <= 768;
+            const vh = window.innerHeight;
+            const HUD_GAP = 76;                          // HUD bottom(64) + 12 여백 — HUD 침범 금지
+            const RAIL_GAP = 80;                         // rail top(72) + 8 여백
+            const cardEstH = isMobile ? 150 : 140;       // reveal card 추정 높이
+            const minTop = HUD_GAP;
+            // viewport 가 너무 낮을 때 (maxTop < minTop) — HUD 아래 가독성 우선
+            let maxTop = vh - cardEstH - RAIL_GAP;
+            if (maxTop < minTop) maxTop = minTop;
+
             if (isMobile) {
+                // 모바일: 트레이 위 중앙. translateX(-50%) 는 CSS 키프레임(lottery-tag-in-mobile)
+                // 안에 포함되어 있어 inline transform 으로 설정하지 않는다 — 기존 충돌 회피.
+                const desiredTop = tray.y - 220;
+                const top = Math.min(maxTop, Math.max(minTop, desiredTop));
                 revealWrap.style.left = '50%';
-                revealWrap.style.top = `${tray.y - 220}px`;
-                revealWrap.style.transform = 'translateX(-50%)';
+                revealWrap.style.top  = `${top}px`;
+                revealWrap.style.transform = '';
+                revealWrap.classList.add('is-mobile');
             } else {
-                revealWrap.style.left = `${tray.x + 140 * tray.scale}px`;
-                revealWrap.style.top = `${tray.y - 80 * tray.scale}px`;
-                revealWrap.style.transform = 'none';
+                // 데스크탑: 트레이 우측 상단. transform 은 사용하지 않으며
+                // viewport 좌우 안에 머무르도록 horizontal clamp.
+                const desiredTop = tray.y - 80 * tray.scale;
+                const top = Math.min(maxTop, Math.max(minTop, desiredTop));
+
+                const desiredLeft = tray.x + 140 * tray.scale;
+                const cardEstW = 376; // clamp(280, 32vw, 360) 최대 + 16px 여백
+                const maxLeft = window.innerWidth - cardEstW;
+                const minLeft = 16;
+                const left = Math.max(minLeft, Math.min(maxLeft, desiredLeft));
+
+                revealWrap.style.left = `${left}px`;
+                revealWrap.style.top  = `${top}px`;
+                revealWrap.style.transform = '';
+                revealWrap.classList.remove('is-mobile');
             }
         }
 
@@ -781,6 +831,15 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
                         phaseStartT = now;
                         setRailPhase('eject');
                         updateMessage(pickingMessage());
+                        // 공 한 개가 빠져나오는 짧은 pop + 곧이어 또르르 roll
+                        if (typeof soundManager !== 'undefined') {
+                            if (soundManager.playLotteryEject) soundManager.playLotteryEject();
+                            setTimeout(() => {
+                                if (typeof soundManager !== 'undefined' && soundManager.playLotteryRoll) {
+                                    soundManager.playLotteryRoll();
+                                }
+                            }, 220);
+                        }
                     }
                 }
             } else if (phase === 'eject') {
@@ -789,6 +848,10 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
                     phase = 'settle';
                     phaseStartT = now;
                     setRailPhase('settle');
+                    // 트레이 안착 톡
+                    if (typeof soundManager !== 'undefined' && soundManager.playLotterySettle) {
+                        soundManager.playLotterySettle();
+                    }
                 }
             } else if (phase === 'settle') {
                 const done = stepWinnerLaunch(now, T.settle);
@@ -809,8 +872,9 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
 
                     if (addPickedStudent) addPickedStudent(student);
                     addChip(student, palette);
-                    if (typeof soundManager !== 'undefined' && soundManager.playLotteryPick) {
-                        soundManager.playLotteryPick();
+                    // 이름 reveal — 밝은 chord
+                    if (typeof soundManager !== 'undefined' && soundManager.playLotteryReveal) {
+                        soundManager.playLotteryReveal();
                     }
 
                     setRailPhase('reveal');
@@ -819,12 +883,11 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
                     currentPickIndex++;
                     phase = 'reveal';
                     phaseStartT = now;
-                }
-            } else if (phase === 'reveal') {
-                stepWinnerLaunch(now, T.reveal); // breathe 효과만
-                if (now - phaseStartT > T.reveal) {
+
+                    // 마지막 라운드면 mix loop 즉시 stop — paper tag 표시 순간부터 silent.
+                    // (기존 finishing-entry cleanup 은 T.reveal=1600ms 지연되어 잔류 음 발생.
+                    //  bgMusicStopped 가드 덕에 finishing-entry cleanup 이 no-op 으로 처리됨.)
                     if (currentPickIndex >= selectedStudents.length) {
-                        // 마지막 — finishing 진입
                         if (!bgMusicStopped && window.AppState && window.AppState.bgMusicInterval) {
                             if (typeof soundManager !== 'undefined' && soundManager.stopSound) {
                                 soundManager.stopSound(window.AppState.bgMusicInterval);
@@ -832,13 +895,44 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
                             window.AppState.bgMusicInterval = null;
                             bgMusicStopped = true;
                         }
-                        revealWrap.classList.remove('show');
-                        revealWrap.setAttribute('aria-hidden', 'true');
+                    }
+                }
+            } else if (phase === 'reveal') {
+                stepWinnerLaunch(now, T.reveal); // breathe 효과만
+                if (now - phaseStartT > T.reveal) {
+                    if (currentPickIndex >= selectedStudents.length) {
+                        // 마지막 — finishing 진입.
+                        // 마지막 reveal 패널(.lottery-reveal-wrap)은 숨기지 않는다.
+                        // 시작 화면 → 마지막 당첨자 → 선발 완료가 한 무대 안에서 이어지도록,
+                        // 같은 paper-ticket 시스템의 두 번째 티켓(finishBanner)을 위에 올린다.
+                        if (!bgMusicStopped && window.AppState && window.AppState.bgMusicInterval) {
+                            if (typeof soundManager !== 'undefined' && soundManager.stopSound) {
+                                soundManager.stopSound(window.AppState.bgMusicInterval);
+                            }
+                            window.AppState.bgMusicInterval = null;
+                            bgMusicStopped = true;
+                        }
+                        // 마지막 reveal — wrapper 에 is-final 모디파이어 추가 (CSS 가
+                        // .lottery-reveal-wrap.is-final .lottery-reveal-eyebrow 로 강조).
+                        // eyebrow 문구를 "당첨 · ROUND 03" → "최종 당첨 · ROUND 03" 로 갱신.
+                        revealWrap.classList.add('is-final');
+                        const revealEyebrowEl = revealWrap.querySelector('.lottery-reveal-eyebrow');
+                        if (revealEyebrowEl) {
+                            revealEyebrowEl.innerHTML = `최종 당첨 · ROUND ${String(total).padStart(2, '0')}`;
+                        }
                         isComplete = true;
                         phase = 'finishing';
                         phaseStartT = now;
                         updateMessage('선발 완료!');
                         setRailPhase('finishing');
+                        if (railHintTextEl) railHintTextEl.textContent = '선발 완료';
+                        // finish ticket 콘텐츠 채우기 + show
+                        if (finishRoundEl) {
+                            finishRoundEl.textContent = `${String(total).padStart(2, '0')} / ${String(total).padStart(2, '0')}`;
+                        }
+                        if (finishSubEl) {
+                            finishSubEl.textContent = classLabel || '';
+                        }
                         finishBanner.classList.add('show');
                         finishBanner.setAttribute('aria-hidden', 'false');
 
