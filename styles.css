@@ -2520,25 +2520,24 @@ a:focus-visible {
 }
 
 /* =========================================================
-   Lottery theme — Broadcast Studio v2
-   themes/lottery.js 가 .lottery-stage 컨테이너와 자식 DOM을
-   동적으로 만들었다 cleanup 에서 제거한다. 다른 테마(roulette/
-   fishing) 에 영향이 없도록 모든 셀렉터는 .lottery- 접두사로
-   격리한다.
+   Lottery theme — Bright Kitsch Arcade
+   themes/lottery.js 가 .lottery-stage 컨테이너와 자식 DOM을 동적으로
+   만들었다 cleanup 에서 제거한다. cream/coral/lemon 의 밝은 부스 무대,
+   둥근 acrylic 글로브, 짧은 투명 슈트, 펠트 트레이, 단순화된 고양이
+   마스코트, 종이 태그 reveal. SVG + HTML 오버레이 (Three.js 미사용).
    ========================================================= */
 
-/* lottery 진행 동안 컨테이너의 기존 분홍/보라 그라데이션과
-   ::after 비네트를 비활성. 깊은 navy 는 three.js scene 자체가
-   그리므로 컨테이너 배경은 투명으로 둔다. */
-.animation-container.lottery-active.fullscreen-animation { background: transparent; }
+/* lottery 진행 동안 컨테이너 기존 분홍/보라 그라데이션과 ::after 비네트 비활성.
+   배경은 lottery.js 의 SVG layer 가 그린다 — 컨테이너는 cream fallback. */
+.animation-container.lottery-active.fullscreen-animation {
+    background: #FBE9BD;
+}
 .animation-container.lottery-active.fullscreen-animation::after { display: none; }
 
-/* 공통 animation-message 는 lottery 동안 숨김 — HUD/reveal 패널이
-   대체 표시한다. aria-live 가 없는 단순 시각 요소라 display:none 으로 처리. */
+/* animation-message 시각 숨김 (HUD/reveal 패널이 대체) */
 .animation-container.lottery-active .animation-message { display: none; }
 
-/* picked-students-live 는 display:none 금지 (aria-live 유지).
-   sr-only 패턴으로 시각만 숨김 — 스크린리더 announce 는 계속 동작. */
+/* picked-students-live — display:none 금지. sr-only 패턴. */
 .animation-container.lottery-active .picked-students-live {
     position: absolute;
     width: 1px;
@@ -2553,14 +2552,25 @@ a:focus-visible {
     box-shadow: none;
 }
 
+/* Pause button 위치 보정 — 기본 (top 24, right 24) 이 HUD ROUND 카운터와 겹친다.
+   lottery 활성 시 HUD 아래로 이동 (top 80). roulette/fishing 영향 없음. */
+.animation-container.lottery-active .animation-controls {
+    top: 80px;
+    right: 24px;
+    bottom: auto;
+    left: auto;
+    transform: none;
+}
+
 /* ── stage 컨테이너 ── */
 .lottery-stage {
     position: absolute;
     inset: 0;
     pointer-events: none;
     z-index: 6;
-    color: #F4EFE0;
+    color: #2A2A3C;
     font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+    overflow: hidden;
 }
 .lottery-mono {
     font-family: 'Manrope', 'Pretendard Variable', system-ui, sans-serif;
@@ -2568,49 +2578,76 @@ a:focus-visible {
     font-feature-settings: 'tnum' 1;
 }
 
-/* ── 분위기 (vignette + floor pool + dust motes) — light cone 은
-   3D 카메라와 매칭이 어려워 제외, 시안의 미세한 입체감만 차용 ── */
-.lottery-atmosphere {
+/* ── 배경/부스/장치 SVG (모두 viewport 전체) ── */
+.lottery-booth-svg,
+.lottery-cat-svg {
     position: absolute;
     inset: 0;
+    width: 100%;
+    height: 100%;
     pointer-events: none;
     overflow: hidden;
+    display: block;
 }
-.lottery-vignette {
+
+/* ── 공 wrap — JS 가 글로브 중심 좌표(viewport 픽셀)로 left/top 갱신 ── */
+.lottery-ball-wrap {
+    position: absolute;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    z-index: 11;
+    /* JS 가 --lo-scale 변수로 viewport 스케일 전달 — 공 자식의 위치/크기에 적용 */
+    --lo-scale: 1;
+}
+
+/* ── 개별 공 (translate + rotate 만 변경, scale 은 winner 강조 시만) ── */
+.lottery-ball {
+    position: absolute;
+    left: 0;
+    top: 0;
+    /* viewBox 1280×800 좌표계 단위로 그려진 공 — wrap 의 scale 을 상속 */
+    width: 44px;   /* BALL_R 22 × 2 */
+    height: 44px;
+    transform-origin: center;
+    transform: translate(-50%, -50%);
+    will-change: transform, filter;
+    pointer-events: none;
+    /* wrap 의 --lo-scale 을 받아 공 자체를 viewport 비례 확대 */
+    scale: var(--lo-scale, 1);
+}
+.lottery-ball-sphere {
     position: absolute;
     inset: 0;
-    background: radial-gradient(ellipse at center, transparent 38%, rgba(0, 0, 0, 0.55) 100%);
-}
-.lottery-floor-pool {
-    position: absolute;
-    bottom: 12%;
-    left: 50%;
-    width: 36vw;
-    max-width: 560px;
-    height: 80px;
-    transform: translateX(-50%);
-    background: radial-gradient(ellipse at center, rgba(232, 202, 138, 0.18) 0%, rgba(232, 202, 138, 0.05) 38%, transparent 72%);
-    filter: blur(14px);
-    animation: lottery-floor 6s ease-in-out infinite;
-}
-.lottery-mote {
-    position: absolute;
     border-radius: 50%;
-    background: rgba(232, 202, 138, 0.7);
-    box-shadow: 0 0 6px rgba(232, 202, 138, 0.4);
-    filter: blur(0.5px);
-    opacity: 0;
-    animation: lottery-mote linear infinite;
 }
-@keyframes lottery-mote {
-    0%   { transform: translate(0, 0); opacity: 0; }
-    10%  { opacity: 0.7; }
-    90%  { opacity: 0.5; }
-    100% { transform: translate(var(--mx, 12px), -180px); opacity: 0; }
+.lottery-ball-disc {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 26px;
+    height: 26px;
+    margin: -13px 0 0 -13px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 40% 35%, #FFFFFF 0%, #FBF1D8 75%, #EBD9A6 100%);
+    box-shadow: inset 0 -1px 2px rgba(0,0,0,.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Manrope', system-ui, sans-serif;
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    line-height: 1;
 }
-@keyframes lottery-floor {
-    0%, 100% { opacity: 0.55; }
-    50%      { opacity: 0.82; }
+.lottery-ball-glint {
+    position: absolute;
+    top: 5px;
+    left: 8px;
+    width: 11px;
+    height: 8px;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at 40% 35%, rgba(255,255,255,.9) 0%, rgba(255,255,255,0) 70%);
 }
 
 /* ── 상단 HUD (64px) ── */
@@ -2623,81 +2660,81 @@ a:focus-visible {
     justify-content: space-between;
     padding: 0 clamp(16px, 3vw, 40px);
     box-sizing: border-box;
-    z-index: 8;
-}
-.lottery-hud::after {
-    content: '';
-    position: absolute;
-    left: clamp(16px, 3vw, 40px);
-    right: clamp(16px, 3vw, 40px);
-    bottom: 0;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(232, 226, 210, 0.1), transparent);
+    z-index: 50;
 }
 .lottery-hud-left, .lottery-hud-right {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 12px;
+    background: rgba(255,255,255,0.9);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    padding: 8px 16px 8px 10px;
+    border-radius: 999px;
+    box-shadow: 0 4px 14px rgba(60,40,20,.14), inset 0 1px 0 rgba(255,255,255,.7);
+    border: 1px solid rgba(255,255,255,.7);
 }
-.lottery-hud-mark {
-    width: 28px;
-    height: 28px;
-    border-radius: 7px;
+.lottery-hud-right { padding: 8px 16px; }
+/* ※ P 마크 캡슐 없음 — 한글 "로또" 칩으로 교체 */
+.lottery-hud-chip {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    color: #fff;
+    font-weight: 800;
     font-size: 13px;
-    font-weight: 700;
-    color: #E8CA8A;
-    background: linear-gradient(135deg, #2A2F40 0%, #161A28 100%);
-    border: 1px solid rgba(201, 166, 104, 0.4);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    letter-spacing: 0.4px;
+    background: linear-gradient(135deg, #FF8E72, #E14B4B);
+    box-shadow: 0 2px 6px rgba(225,75,75,.4);
 }
 .lottery-hud-class {
     font-size: 15px;
-    font-weight: 600;
-    letter-spacing: -0.2px;
-    color: #F1ECDD;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: #2A2A3C;
 }
 .lottery-hud-sub {
     font-size: 12.5px;
     font-weight: 500;
-    color: rgba(232, 226, 210, 0.5);
+    color: rgba(42,42,60,.62);
     letter-spacing: -0.1px;
 }
 .lottery-hud-label {
     font-family: 'Manrope', 'Pretendard Variable', system-ui, sans-serif;
-    font-size: 11px;
-    font-weight: 600;
+    font-size: 10.5px;
+    font-weight: 700;
     letter-spacing: 2px;
-    color: rgba(232, 226, 210, 0.45);
+    color: rgba(42,42,60,.62);
 }
 .lottery-hud-counter {
     font-family: 'Manrope', 'Pretendard Variable', system-ui, sans-serif;
     font-variant-numeric: tabular-nums;
-    font-size: 20px;
-    font-weight: 600;
-    color: #F1ECDD;
+    font-size: 18px;
+    font-weight: 700;
+    color: #2A2A3C;
     display: inline-flex;
     align-items: baseline;
 }
-.lottery-hud-divider { color: rgba(232, 226, 210, 0.28); margin: 0 1px; }
-.lottery-hud-total { color: rgba(232, 226, 210, 0.5); font-weight: 500; }
+.lottery-hud-divider { color: rgba(42,42,60,.32); margin: 0 1px; }
+.lottery-hud-total { color: rgba(42,42,60,.32); font-weight: 500; }
 .lottery-hud-bar {
     display: flex;
-    gap: 4px;
-    margin-left: 6px;
+    gap: 3px;
+    margin-left: 4px;
 }
 .lottery-hud-bar-cell {
-    width: 16px;
-    height: 3px;
+    width: 12px;
+    height: 4px;
     border-radius: 2px;
-    background: rgba(232, 226, 210, 0.1);
+    background: rgba(60,40,20,.14);
     transition: background 0.4s ease, box-shadow 0.4s ease;
 }
 .lottery-hud-bar-cell.filled {
-    background: linear-gradient(90deg, #E8CA8A, #C9A668);
-    box-shadow: 0 0 6px rgba(232, 202, 138, 0.35);
+    background: linear-gradient(90deg, #FF8E72, #E14B4B);
+    box-shadow: 0 0 6px rgba(255,142,114,.5);
 }
 
 /* ── 하단 rail (72px) ── */
@@ -2705,54 +2742,44 @@ a:focus-visible {
     position: absolute;
     bottom: 0; left: 0; right: 0;
     height: 72px;
+    background: linear-gradient(180deg, rgba(255,250,236,0) 0%, rgba(255,250,236,.94) 35%, rgba(255,250,236,1) 100%);
+    border-top: 1px solid #E9D4A1;
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 0 clamp(16px, 3vw, 40px);
     box-sizing: border-box;
-    z-index: 8;
+    z-index: 50;
     gap: 16px;
-}
-.lottery-rail::before {
-    content: '';
-    position: absolute;
-    left: clamp(16px, 3vw, 40px);
-    right: clamp(16px, 3vw, 40px);
-    top: 0;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(232, 226, 210, 0.07), transparent);
 }
 .lottery-rail-status {
     display: flex;
     align-items: center;
     gap: 10px;
-    min-width: 140px;
+    min-width: 160px;
 }
 .lottery-rail-dot {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
-    background: var(--phase-color, rgba(232, 226, 210, 0.4));
-    box-shadow: 0 0 10px var(--phase-color, transparent);
-    transition: background 0.3s ease;
+    background: rgba(60,40,20,.3);
+    box-shadow: 0 0 10px rgba(60,40,20,.18);
+    transition: background 0.3s ease, box-shadow 0.3s ease;
 }
-.lottery-rail-dot[data-phase="mixing"],
-.lottery-rail-dot[data-phase="launching"],
-.lottery-rail-dot[data-phase="showing"] {
-    animation: lottery-dot-pulse 1.4s ease-in-out infinite;
-}
-.lottery-rail-dot[data-phase="finishing"] {
-    background: #C9A668;
-    box-shadow: 0 0 10px rgba(201, 166, 104, 0.6);
-}
+.lottery-rail-dot[data-phase="mix"]    { background: #FF8E72; box-shadow: 0 0 10px rgba(255,142,114,.6); animation: lottery-dot-pulse 1.4s ease-in-out infinite; }
+.lottery-rail-dot[data-phase="eject"]  { background: #F5C849; box-shadow: 0 0 10px rgba(245,200,73,.6);  animation: lottery-dot-pulse 1.4s ease-in-out infinite; }
+.lottery-rail-dot[data-phase="settle"] { background: #5FD0BD; box-shadow: 0 0 10px rgba(95,208,189,.6); }
+.lottery-rail-dot[data-phase="reveal"] { background: #E14B4B; box-shadow: 0 0 10px rgba(225,75,75,.6); animation: lottery-dot-pulse 1.4s ease-in-out infinite; }
+.lottery-rail-dot[data-phase="gap"]    { background: #C9B5E8; }
+.lottery-rail-dot[data-phase="finishing"] { background: #E14B4B; box-shadow: 0 0 10px rgba(225,75,75,.6); }
 @keyframes lottery-dot-pulse {
-    0%, 100% { opacity: 0.55; }
-    50%      { opacity: 1; }
+    0%, 100% { opacity: 0.55; transform: scale(0.92); }
+    50%      { opacity: 1; transform: scale(1.1); }
 }
 .lottery-rail-status-text {
-    font-size: 12.5px;
-    font-weight: 500;
-    color: rgba(232, 226, 210, 0.72);
+    font-size: 13px;
+    font-weight: 600;
+    color: #2A2A3C;
     letter-spacing: -0.1px;
 }
 .lottery-rail-chips {
@@ -2766,137 +2793,165 @@ a:focus-visible {
     overflow: hidden;
 }
 .lottery-rail-chips-label {
-    font-size: 11px;
-    font-weight: 500;
-    color: rgba(232, 226, 210, 0.42);
+    font-size: 11.5px;
+    font-weight: 600;
+    color: rgba(42,42,60,.62);
     letter-spacing: -0.05px;
+    margin-right: 4px;
 }
 .lottery-rail-chips-empty {
     font-size: 11.5px;
-    color: rgba(232, 226, 210, 0.3);
+    color: rgba(42,42,60,.32);
     font-style: italic;
 }
 .lottery-rail-chip {
     display: inline-flex;
     align-items: center;
     gap: 7px;
-    padding: 5px 12px 5px 9px;
-    background: rgba(232, 226, 210, 0.04);
-    border: 1px solid rgba(232, 226, 210, 0.08);
+    padding: 5px 12px 5px 6px;
+    background: #FFFFFF;
+    border: 1px solid #E9D4A1;
     border-radius: 999px;
-    font-size: 12px;
-    font-weight: 500;
-    color: rgba(232, 226, 210, 0.78);
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #2A2A3C;
     white-space: nowrap;
+    box-shadow: 0 2px 4px rgba(60,40,20,.08);
 }
 .lottery-rail-chip-ball {
-    width: 9px;
-    height: 9px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
-    box-shadow: inset 0 -1px 1px rgba(0, 0, 0, 0.3);
+    box-shadow: inset 0 -2px 3px rgba(0,0,0,.18);
 }
 .lottery-rail-hint {
-    min-width: 110px;
+    min-width: 130px;
     display: flex;
     justify-content: flex-end;
     align-items: center;
 }
 .lottery-rail-hint-text {
-    font-size: 11px;
-    color: rgba(232, 226, 210, 0.4);
+    font-size: 11.5px;
+    color: rgba(42,42,60,.62);
     letter-spacing: -0.05px;
+    padding: 4px 9px;
+    border: 1.4px solid #E14B4B;
+    border-radius: 5px;
+    color: #E14B4B;
+    background: #FFFDF4;
+    font-weight: 700;
+    letter-spacing: 1.4px;
+    font-family: 'Manrope', system-ui, sans-serif;
 }
 
-/* ── reveal 패널 — 박물관 라벨형 ── */
-.lottery-reveal-panel {
+/* ── reveal — paper tag + twine + brass grommet ── */
+.lottery-reveal-wrap {
     position: absolute;
-    width: clamp(280px, 44vw, 460px);
-    box-sizing: border-box;
+    width: clamp(280px, 32vw, 360px);
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
     z-index: 12;
     transform: translateZ(0);
 }
-.lottery-reveal-panel.show {
+.lottery-reveal-wrap.show {
     visibility: visible;
-    animation: lottery-plate-in 0.55s cubic-bezier(0.3, 0.95, 0.4, 1) 0.08s both;
+    opacity: 1;
+    animation: lottery-tag-in 0.55s cubic-bezier(0.3, 0.95, 0.4, 1.08) 0.18s both;
 }
-@keyframes lottery-plate-in {
-    0%   { opacity: 0; clip-path: inset(0 100% 0 0); transform: translateY(6px); }
-    100% { opacity: 1; clip-path: inset(0 0 0 0);    transform: translateY(0); }
+@keyframes lottery-tag-in {
+    0%   { opacity: 0; transform: translateY(-12px) rotate(-8deg) scale(.95); }
+    100% { opacity: 1; transform: translateY(0) rotate(0) scale(1); }
 }
-.lottery-reveal-shelf {
+.lottery-reveal-twine {
     position: absolute;
-    /* 좌측으로 길게 연장하여 winner 공과 시각적으로 같은 brass 선 위에
-       놓인 것처럼 보이게 함 (디자인 시안의 shelf 의도) */
-    left: -160px;
-    right: 24px;
-    top: -1px;
-    height: 1px;
-    background: linear-gradient(90deg, transparent 0%, #C9A668 10%, #E8CA8A 50%, #C9A668 88%, transparent 100%);
-    opacity: 0.7;
-    transform-origin: left center;
+    left: -120px;
+    top: 8px;
+    width: 130px;
+    height: 60px;
+    overflow: visible;
+    pointer-events: none;
+    opacity: 0;
 }
-.lottery-reveal-panel.show .lottery-reveal-shelf {
-    animation: lottery-shelf-in 0.5s cubic-bezier(0.4, 1.1, 0.5, 1) both;
+.lottery-reveal-wrap.show .lottery-reveal-twine {
+    animation: lottery-twine-in 0.4s ease 0.10s both;
 }
-@keyframes lottery-shelf-in {
-    from { transform: scaleX(0); opacity: 0; }
-    to   { transform: scaleX(1); opacity: 0.7; }
+@keyframes lottery-twine-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
 }
 .lottery-reveal-card {
     position: relative;
-    background: linear-gradient(180deg, rgba(22, 27, 46, 0.86) 0%, rgba(10, 13, 27, 0.94) 100%);
-    border-top: 1px solid #C9A668;
-    border-bottom: 1px solid rgba(122, 94, 51, 0.7);
-    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-    backdrop-filter: blur(14px) saturate(140%);
-    -webkit-backdrop-filter: blur(14px) saturate(140%);
-    display: flex;
-    align-items: stretch;
-    min-height: 158px;
+    background: #FBF1D8;
+    border: 2px solid #E9D4A1;
+    border-radius: 16px;
+    box-shadow: 0 14px 30px rgba(60,40,20,.18), inset 0 1px 0 rgba(255,255,255,.55);
+    padding: 18px 22px 20px 42px;
+    box-sizing: border-box;
+    min-height: 130px;
+    transform: rotate(-2.5deg);
+}
+.lottery-reveal-grommet {
+    position: absolute;
+    left: -4px;
+    top: 16px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #FFEAA0, #C99320);
+    border: 2.4px solid #FBF1D8;
+    box-shadow: 0 2px 4px rgba(0,0,0,.18);
+}
+.lottery-reveal-grommet-hole {
+    position: absolute;
+    left: 2px;
+    top: 22px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #3F2916;
 }
 .lottery-reveal-stripe {
-    width: 4px;
-    background: #E8CA8A;
-    box-shadow: 0 0 22px rgba(232, 202, 138, 0.6);
-    flex: 0 0 4px;
+    position: absolute;
+    left: 14px;
+    top: 8px;
+    bottom: 8px;
+    width: 3px;
+    background: #FF8E72;
+    border-radius: 2px;
 }
 .lottery-reveal-body {
-    padding: 22px 28px 22px 26px;
-    flex: 1;
-    min-width: 0;
+    padding-left: 4px;
 }
 .lottery-reveal-eyebrow {
     font-family: 'Manrope', 'Pretendard Variable', system-ui, sans-serif;
     font-variant-numeric: tabular-nums;
-    font-size: 10.5px;
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: 2.6px;
-    color: #E8CA8A;
+    color: #E14B4B;
     text-transform: uppercase;
-    margin-bottom: 12px;
+    margin-bottom: 6px;
 }
 .lottery-reveal-name {
     font-family: 'Pretendard Variable', Pretendard, sans-serif;
     font-weight: 700;
-    font-size: clamp(2.4rem, 6vw, 3.6rem);
+    font-size: clamp(2.2rem, 5vw, 3.2rem);
     line-height: 1;
     letter-spacing: -0.04em;
-    color: #F4EFE0;
-    margin-bottom: 10px;
+    color: #2A2A3C;
+    margin-bottom: 8px;
     word-break: keep-all;
 }
 .lottery-reveal-sub {
-    font-size: 13.5px;
-    font-weight: 500;
-    color: rgba(232, 226, 210, 0.55);
+    font-size: 12.5px;
+    font-weight: 600;
+    color: rgba(42,42,60,.62);
     letter-spacing: -0.1px;
-    min-height: 1.4em;
+    min-height: 1em;
 }
 
-/* ── 선발 완료 배너 (1.1초 노출) ── */
+/* ── 선발 완료 배너 ── */
 .lottery-finish-banner {
     position: absolute;
     left: 50%;
@@ -2906,71 +2961,65 @@ a:focus-visible {
     font-weight: 700;
     font-size: clamp(2rem, 5vw, 3rem);
     letter-spacing: -0.04em;
-    color: #F4EFE0;
+    color: #2A2A3C;
     padding: 22px 44px;
-    background: rgba(10, 13, 27, 0.7);
-    border-top: 1px solid #C9A668;
-    border-bottom: 1px solid rgba(122, 94, 51, 0.7);
-    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(14px) saturate(140%);
-    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    background: #FBF1D8;
+    border: 2px solid #E9D4A1;
+    border-radius: 18px;
+    box-shadow: 0 20px 44px rgba(60,40,20,.22), inset 0 1px 0 rgba(255,255,255,.55);
     opacity: 0;
     visibility: hidden;
-    z-index: 14;
+    z-index: 60;
     pointer-events: none;
 }
 .lottery-finish-banner.show {
     visibility: visible;
-    animation: lottery-finish-in 0.35s cubic-bezier(0.3, 0.95, 0.4, 1) both;
+    animation: lottery-finish-in 0.4s cubic-bezier(0.3, 0.95, 0.4, 1.08) both;
 }
 @keyframes lottery-finish-in {
-    0%   { opacity: 0; transform: translate(-50%, calc(-50% + 6px)); }
-    100% { opacity: 1; transform: translate(-50%, -50%); }
+    0%   { opacity: 0; transform: translate(-50%, calc(-50% + 8px)) scale(.96); }
+    100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
 /* ── lottery 전용 반응형 ── */
-@media (max-width: 768px) {
-    .lottery-hud { height: 56px; padding: 0 14px; }
-    .lottery-hud-mark { width: 24px; height: 24px; font-size: 12px; }
+@media (max-width: 900px) {
+    .lottery-hud { height: 56px; padding: 0 12px; }
+    .lottery-hud-left, .lottery-hud-right { padding: 6px 12px 6px 8px; gap: 8px; }
+    .lottery-hud-chip { width: 26px; height: 26px; font-size: 12px; }
     .lottery-hud-class { font-size: 13.5px; }
     .lottery-hud-sub { display: none; }
-    .lottery-hud-counter { font-size: 17px; }
+    .lottery-hud-counter { font-size: 16px; }
     .lottery-hud-bar { display: none; }
 
-    .lottery-rail { height: 64px; padding: 0 14px; gap: 10px; }
-    .lottery-rail-status { min-width: 90px; }
+    .lottery-rail { height: 64px; padding: 0 12px; gap: 10px; }
+    .lottery-rail-status { min-width: 100px; }
     .lottery-rail-status-text { font-size: 11.5px; }
     .lottery-rail-chips-label { display: none; }
     .lottery-rail-hint { display: none; }
-    .lottery-rail-chip { padding: 4px 10px 4px 8px; font-size: 11.5px; }
+    .lottery-rail-chip { padding: 4px 10px 4px 5px; font-size: 11.5px; }
+    .lottery-rail-chip-ball { width: 18px; height: 18px; }
 
-    .lottery-reveal-card { min-height: 130px; }
-    .lottery-reveal-body { padding: 18px 20px 18px 18px; }
-    .lottery-reveal-eyebrow { font-size: 9.5px; margin-bottom: 8px; letter-spacing: 2px; }
-    .lottery-reveal-shelf { left: -90px; }
-
-    .lottery-floor-pool { width: 60vw; height: 60px; bottom: 14%; }
+    .lottery-reveal-card { min-height: 120px; padding: 14px 18px 16px 36px; }
+    .lottery-reveal-eyebrow { font-size: 10px; margin-bottom: 5px; letter-spacing: 2px; }
 }
 
 /* =========================================================
-   Roulette theme — Broadcast Studio v2 (refined v3)
-   themes/roulette.js 가 .roulette-stage 컨테이너와 자식 DOM을
-   동적으로 만들었다 cleanup 에서 제거한다. SVG 휠은 viewport
-   기준으로 크게 그려지고, 작은 16:9 프레임 안에 가두지 않는다.
+   Roulette theme — Bright Kitsch Arcade
+   themes/roulette.js 가 .roulette-stage 컨테이너와 자식 DOM 을 동적으로
+   만들었다 cleanup 에서 제거한다. 파스텔 mint 무대 위 12-segment
+   prize wheel, 코랄 화살 포인터, 종이 펜넌트 reveal. SVG + HTML 오버레이.
    ========================================================= */
 
-/* 컨테이너 — 기존 분홍/보라 그라데이션 무효화하고 deep navy 무대
-   전체 viewport 채우기. */
+/* 컨테이너 — 기존 분홍/보라 그라데이션 무효화. 배경은 roulette.js 의 backdrop SVG. */
 .animation-container.roulette-active.fullscreen-animation {
-    background: radial-gradient(ellipse at 50% 30%, #161B2E 0%, #0A0D1B 52%, #03050D 100%);
+    background: #CDEFE3;
 }
 .animation-container.roulette-active.fullscreen-animation::after { display: none; }
 
-/* animation-message 시각 숨김 (HUD/reveal 패널이 대체) */
+/* animation-message 시각 숨김 */
 .animation-container.roulette-active .animation-message { display: none; }
 
-/* picked-students-live — display:none 금지. sr-only 패턴으로 시각만 숨김,
-   aria-live announce 유지. */
+/* picked-students-live sr-only */
 .animation-container.roulette-active .picked-students-live {
     position: absolute;
     width: 1px;
@@ -2985,86 +3034,40 @@ a:focus-visible {
     box-shadow: none;
 }
 
+/* Pause button 위치 보정 — HUD 와 겹치지 않게 아래로 이동 */
+.animation-container.roulette-active .animation-controls {
+    top: 80px;
+    right: 24px;
+    bottom: auto;
+    left: auto;
+    transform: none;
+}
+
 /* ── stage ── */
 .roulette-stage {
-    /* 휠 크기 단위 — 모든 자식이 이 변수를 참조해 viewport 에 비례 배치 */
-    --wheel-svg-size: min(57vh, 88vw, 720px);
+    /* 휠 크기 단위 — viewport height 의 55~65% 점유 */
+    --wheel-svg-size: min(62vh, 88vw, 760px);
     position: absolute;
     inset: 0;
     pointer-events: none;
     z-index: 6;
-    color: #F4EFDF;
+    color: #2A2A3C;
     font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
-}
-
-/* ── 분위기 — vignette + 키 라이트 콘 + 보조 콘 + floor pool + 모트 ── */
-.roulette-atmosphere {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
     overflow: hidden;
 }
-.roulette-vignette {
+
+/* ── 배경 SVG ── */
+.roulette-backdrop-svg {
     position: absolute;
     inset: 0;
-    background: radial-gradient(ellipse at center, transparent 40%, rgba(0, 0, 0, 0.55) 100%);
-}
-.roulette-key-cone {
-    position: absolute;
-    top: -10px;
-    left: 50%;
-    width: min(720px, 90vw);
-    height: 88vh;
-    margin-left: calc(min(720px, 90vw) / -2);
-    background: linear-gradient(180deg, rgba(242, 211, 132, 0.22) 0%, rgba(242, 211, 132, 0.08) 35%, transparent 80%);
-    clip-path: polygon(44% 0%, 56% 0%, 100% 100%, 0% 100%);
-    filter: blur(2px);
-}
-.roulette-inner-cone {
-    position: absolute;
-    top: 40px;
-    left: 50%;
-    width: min(520px, 70vw);
-    height: 72vh;
-    margin-left: calc(min(520px, 70vw) / -2);
-    background: radial-gradient(ellipse at 50% 35%, rgba(242, 211, 132, 0.14) 0%, rgba(242, 211, 132, 0.05) 30%, transparent 60%);
-    filter: blur(8px);
-}
-.roulette-floor-pool {
-    position: absolute;
-    bottom: 84px;
-    left: 50%;
-    width: min(640px, 70vw);
-    height: 80px;
-    margin-left: calc(min(640px, 70vw) / -2);
-    background: radial-gradient(ellipse at center, rgba(242, 211, 132, 0.36) 0%, rgba(242, 211, 132, 0.08) 40%, transparent 75%);
-    filter: blur(18px);
-    opacity: 0.7;
-    transition: opacity 0.6s ease;
-    animation: roulette-floor 6s ease-in-out infinite;
-}
-.roulette-stage.dim .roulette-floor-pool { opacity: 1; }
-.roulette-mote {
-    position: absolute;
-    border-radius: 50%;
-    background: rgba(232, 202, 138, 0.72);
-    box-shadow: 0 0 6px rgba(232, 202, 138, 0.4);
-    filter: blur(0.5px);
-    opacity: 0;
-    animation: roulette-mote linear infinite;
-}
-@keyframes roulette-mote {
-    0%   { transform: translate(0, 0); opacity: 0; }
-    12%  { opacity: 0.7; }
-    88%  { opacity: 0.5; }
-    100% { transform: translate(var(--mx, 12px), -200px); opacity: 0; }
-}
-@keyframes roulette-floor {
-    0%, 100% { opacity: 0.55; }
-    50%      { opacity: 0.82; }
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: hidden;
+    display: block;
 }
 
-/* ── 상단 HUD (64px) ── */
+/* ── 상단 HUD ── */
 .roulette-hud {
     position: absolute;
     top: 0; left: 0; right: 0;
@@ -3076,83 +3079,82 @@ a:focus-visible {
     box-sizing: border-box;
     z-index: 50;
 }
-.roulette-hud::after {
-    content: '';
-    position: absolute;
-    left: clamp(16px, 3vw, 40px);
-    right: clamp(16px, 3vw, 40px);
-    bottom: 0;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(232, 226, 210, 0.1), transparent);
-}
 .roulette-hud-left, .roulette-hud-right {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 12px;
+    background: rgba(255,255,255,0.9);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    padding: 8px 16px 8px 10px;
+    border-radius: 999px;
+    box-shadow: 0 4px 14px rgba(46,140,149,.18), inset 0 1px 0 rgba(255,255,255,.7);
+    border: 1px solid rgba(255,255,255,.7);
 }
-/* HUD 좌측 작은 브랜드 마크는 허용 — 휠 중심부에는 P 없음 */
-.roulette-hud-mark {
-    width: 28px;
-    height: 28px;
-    border-radius: 7px;
+.roulette-hud-right { padding: 8px 16px; }
+/* ※ P 마크 절대 금지 — 한글 "룰렛" 칩만 */
+.roulette-hud-chip {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    color: #fff;
+    font-weight: 800;
     font-size: 13px;
-    font-weight: 700;
-    color: #F2D384;
-    background: linear-gradient(135deg, #2A2F40 0%, #161A28 100%);
-    border: 1px solid rgba(217, 178, 111, 0.4);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    letter-spacing: 0.4px;
+    background: linear-gradient(135deg, #5FD0BD, #2E8C95);
+    box-shadow: 0 2px 6px rgba(46,140,149,.4);
 }
 .roulette-hud-class {
     font-size: 15px;
-    font-weight: 600;
-    letter-spacing: -0.2px;
-    color: #F4EFDF;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: #2A2A3C;
 }
 .roulette-hud-sub {
     font-size: 12.5px;
     font-weight: 500;
-    color: rgba(232, 226, 210, 0.62);
+    color: rgba(42,42,60,.62);
     letter-spacing: -0.1px;
 }
 .roulette-hud-label {
     font-family: 'Manrope', 'Pretendard Variable', system-ui, sans-serif;
-    font-size: 11px;
-    font-weight: 600;
+    font-size: 10.5px;
+    font-weight: 700;
     letter-spacing: 2px;
-    color: rgba(232, 226, 210, 0.6);
+    color: rgba(42,42,60,.62);
 }
 .roulette-hud-counter {
     font-family: 'Manrope', 'Pretendard Variable', system-ui, sans-serif;
     font-variant-numeric: tabular-nums;
-    font-size: 20px;
-    font-weight: 600;
-    color: #F4EFDF;
+    font-size: 18px;
+    font-weight: 700;
+    color: #2A2A3C;
     display: inline-flex;
     align-items: baseline;
 }
-.roulette-hud-divider { color: rgba(232, 226, 210, 0.4); margin: 0 1px; }
-.roulette-hud-total { color: rgba(232, 226, 210, 0.5); font-weight: 500; }
+.roulette-hud-divider { color: rgba(42,42,60,.32); margin: 0 1px; }
+.roulette-hud-total { color: rgba(42,42,60,.32); font-weight: 500; }
 .roulette-hud-bar {
     display: flex;
-    gap: 4px;
-    margin-left: 6px;
+    gap: 3px;
+    margin-left: 4px;
 }
 .roulette-hud-bar-cell {
-    width: 16px;
-    height: 3px;
+    width: 12px;
+    height: 4px;
     border-radius: 2px;
-    background: rgba(232, 226, 210, 0.14);
+    background: rgba(46,140,149,.14);
     transition: background 0.4s ease, box-shadow 0.4s ease;
 }
 .roulette-hud-bar-cell.filled {
-    background: linear-gradient(90deg, #F2D384, #D9B26F);
-    box-shadow: 0 0 7px rgba(242, 211, 132, 0.45);
+    background: linear-gradient(90deg, #5FD0BD, #2E8C95);
+    box-shadow: 0 0 6px rgba(95,208,189,.5);
 }
 
-/* ── 휠 wrap — fullscreen viewport 중앙, 큰 크기 ── */
+/* ── 휠 wrap — 중앙, 큰 크기 ── */
 .roulette-wheel-wrap {
     position: absolute;
     left: 50%;
@@ -3162,9 +3164,9 @@ a:focus-visible {
     transform: translate(-50%, -50%);
     z-index: 10;
     pointer-events: none;
-    transition: opacity 0.6s ease;
+    transition: opacity 0.55s ease;
 }
-.roulette-wheel-wrap.dim { opacity: 0.62; }
+.roulette-wheel-wrap.dim { opacity: 0.78; }
 .roulette-wheel-svg {
     width: 100%;
     height: 100%;
@@ -3172,132 +3174,124 @@ a:focus-visible {
     overflow: visible;
 }
 
-/* ── reveal — brass rail + finial + plate (포인터에서 연장되는 시각 연결) ── */
+/* ── reveal — paper pennant + twine ── */
 .roulette-reveal-wrap {
     position: absolute;
     left: 50%;
     top: 50%;
-    width: 0;
-    height: 0;
-    z-index: 12;
-    pointer-events: none;
-}
-.roulette-reveal-rail {
-    position: absolute;
-    /* SVG y = -244 / 560 = -0.4357 of wheel size, from wheel center */
-    top: calc(var(--wheel-svg-size) * -0.4357);
-    left: 0;
-    width: calc(var(--wheel-svg-size) * 0.8393); /* 470/560 */
-    height: 1px;
-    background: linear-gradient(90deg, #F2D384 0%, #D9B26F 40%, #D9B26F 75%, transparent 100%);
-    box-shadow: 0 0 8px rgba(242, 211, 132, 0.45);
-    transform-origin: left center;
-    opacity: 0;
-}
-.roulette-reveal-wrap.show .roulette-reveal-rail {
-    animation: roulette-rail-in 0.5s cubic-bezier(0.4, 1.1, 0.5, 1) 0.05s both;
-}
-@keyframes roulette-rail-in {
-    from { opacity: 0; transform: scaleX(0); }
-    to   { opacity: 1; transform: scaleX(1); }
-}
-.roulette-reveal-finial {
-    position: absolute;
-    top: calc(var(--wheel-svg-size) * -0.4357);
-    left: calc(var(--wheel-svg-size) * 0.8393);
-    width: 8px;
-    height: 8px;
-    margin-left: -4px;
-    margin-top: -4px;
-    border-radius: 50%;
-    background: radial-gradient(circle at 30% 30%, #F2D384, #8A6E3B);
-    box-shadow: 0 0 8px rgba(242, 211, 132, 0.42);
-    opacity: 0;
-}
-.roulette-reveal-wrap.show .roulette-reveal-finial {
-    animation: roulette-finial-in 0.35s ease-out 0.25s both;
-}
-@keyframes roulette-finial-in {
-    from { opacity: 0; transform: scale(0); }
-    to   { opacity: 1; transform: scale(1); }
-}
-.roulette-reveal-panel {
-    position: absolute;
-    /* aligned with rail y, slightly inset from wheel right */
-    top: calc(var(--wheel-svg-size) * -0.4357);
-    left: calc(var(--wheel-svg-size) * 0.0571); /* 32/560 */
-    /* width 비례 + 텍스트 가독성 위해 min 보장 */
-    width: clamp(290px, calc(var(--wheel-svg-size) * 0.7679), 480px);
-    box-sizing: border-box;
+    /* 휠 우측 상단으로 옮긴 위치 — viewport 비례 */
+    margin-left: calc(var(--wheel-svg-size) * 0.18);
+    margin-top: calc(var(--wheel-svg-size) * -0.45);
+    width: clamp(290px, 32vw, 380px);
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
+    z-index: 12;
 }
-.roulette-reveal-wrap.show .roulette-reveal-panel {
+.roulette-reveal-wrap.show {
     visibility: visible;
-    animation: roulette-plate-in 0.55s cubic-bezier(0.3, 0.95, 0.4, 1) 0.15s both;
+    opacity: 1;
+    animation: roulette-pen-in 0.55s cubic-bezier(0.3, 0.95, 0.4, 1.08) 0.15s both;
 }
-@keyframes roulette-plate-in {
-    0%   { opacity: 0; clip-path: inset(0 100% 0 0); transform: translate(8px, 0); }
-    100% { opacity: 1; clip-path: inset(0 0 0 0);    transform: translate(0, 0); }
+@keyframes roulette-pen-in {
+    0%   { opacity: 0; transform: translateY(-12px) rotate(-7deg) scale(.96); }
+    100% { opacity: 1; transform: translateY(0) rotate(0) scale(1); }
+}
+.roulette-reveal-twine {
+    position: absolute;
+    left: -150px;
+    top: 6px;
+    width: 160px;
+    height: 60px;
+    overflow: visible;
+    pointer-events: none;
+    opacity: 0;
+}
+.roulette-reveal-wrap.show .roulette-reveal-twine {
+    animation: roulette-twine-in 0.4s ease 0.08s both;
+}
+@keyframes roulette-twine-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
 }
 .roulette-reveal-card {
     position: relative;
-    display: flex;
-    align-items: stretch;
-    min-height: 152px;
-    background: linear-gradient(180deg, rgba(28, 33, 54, 0.92) 0%, rgba(12, 15, 30, 0.97) 100%);
-    border-top: 1.5px solid #F2D384;
-    border-bottom: 1px solid rgba(138, 110, 59, 0.8);
-    box-shadow: 0 28px 56px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 40px rgba(242, 211, 132, 0.1);
-    backdrop-filter: blur(14px) saturate(140%);
-    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    background: #FBF1D8;
+    border: 2px solid #E9D4A1;
+    border-radius: 16px;
+    box-shadow: 0 16px 32px rgba(60,40,20,.18), inset 0 1px 0 rgba(255,255,255,.6);
+    padding: 18px 24px 20px 42px;
+    box-sizing: border-box;
+    min-height: 140px;
+    transform: rotate(-2deg);
+}
+.roulette-reveal-grommet {
+    position: absolute;
+    left: -4px;
+    top: 14px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #FFE9A8, #C99320);
+    border: 2.4px solid #FBF1D8;
+    box-shadow: 0 2px 4px rgba(0,0,0,.18);
+}
+.roulette-reveal-grommet-hole {
+    position: absolute;
+    left: 2px;
+    top: 20px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #3F2916;
 }
 .roulette-reveal-stripe {
+    position: absolute;
+    left: 14px;
+    top: 8px;
+    bottom: 8px;
     width: 3px;
-    flex: 0 0 3px;
-    background: linear-gradient(180deg, #F2D384, #D9B26F);
-    box-shadow: 0 0 18px rgba(242, 211, 132, 0.55);
+    background: #FF8E72;
+    border-radius: 2px;
 }
 .roulette-reveal-body {
-    padding: 22px 26px 20px 26px;
-    flex: 1;
-    min-width: 0;
+    padding-left: 4px;
 }
 .roulette-reveal-eyebrow {
     font-family: 'Manrope', 'Pretendard Variable', system-ui, sans-serif;
     font-variant-numeric: tabular-nums;
-    font-size: 10.5px;
+    font-size: 11px;
     font-weight: 700;
-    letter-spacing: 2.4px;
-    color: #F2D384;
+    letter-spacing: 2.6px;
+    color: #E14B4B;
     text-transform: uppercase;
-    margin-bottom: 12px;
+    margin-bottom: 6px;
 }
 .roulette-reveal-name {
     font-family: 'Pretendard Variable', Pretendard, sans-serif;
     font-weight: 700;
-    font-size: clamp(2.2rem, 5.6vw, 3.4rem);
+    font-size: clamp(2.4rem, 5.6vw, 3.4rem);
     line-height: 1;
     letter-spacing: -0.04em;
-    color: #FBF6E6;
-    margin-bottom: 10px;
-    text-shadow: 0 0 32px rgba(242, 211, 132, 0.2);
+    color: #2A2A3C;
+    margin-bottom: 8px;
     word-break: keep-all;
 }
 .roulette-reveal-sub {
-    font-size: 13px;
-    font-weight: 500;
-    color: rgba(232, 226, 210, 0.72);
+    font-size: 12.5px;
+    font-weight: 600;
+    color: rgba(42,42,60,.62);
     letter-spacing: -0.1px;
-    min-height: 1.4em;
+    min-height: 1em;
 }
 
-/* ── 하단 rail (72px) ── */
+/* ── 하단 rail ── */
 .roulette-rail {
     position: absolute;
     bottom: 0; left: 0; right: 0;
     height: 72px;
+    background: linear-gradient(180deg, rgba(248,255,250,0) 0%, rgba(248,255,250,.92) 35%, rgba(248,255,250,1) 100%);
+    border-top: 1px solid #E9D4A1;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -3306,15 +3300,6 @@ a:focus-visible {
     z-index: 50;
     gap: 16px;
 }
-.roulette-rail::before {
-    content: '';
-    position: absolute;
-    left: clamp(16px, 3vw, 40px);
-    right: clamp(16px, 3vw, 40px);
-    top: 0;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(232, 226, 210, 0.07), transparent);
-}
 .roulette-rail-status {
     display: flex;
     align-items: center;
@@ -3322,39 +3307,28 @@ a:focus-visible {
     min-width: 160px;
 }
 .roulette-rail-dot {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
-    background: rgba(232, 226, 210, 0.4);
+    background: rgba(60,40,20,.3);
+    box-shadow: 0 0 10px rgba(60,40,20,.18);
     transition: background 0.3s ease, box-shadow 0.3s ease;
 }
-.roulette-rail-dot[data-phase="spin"],
-.roulette-rail-dot[data-phase="decel"] {
-    background: #E89A2D;
-    box-shadow: 0 0 10px rgba(232, 154, 45, 0.6);
-    animation: roulette-dot-pulse 1.4s ease-in-out infinite;
-}
-.roulette-rail-dot[data-phase="stop"],
-.roulette-rail-dot[data-phase="reveal"] {
-    background: #F2D384;
-    box-shadow: 0 0 10px rgba(242, 211, 132, 0.55);
-    animation: roulette-dot-pulse 1.4s ease-in-out infinite;
-}
-.roulette-rail-dot[data-phase="gap"] {
-    background: rgba(232, 226, 210, 0.55);
-}
-.roulette-rail-dot[data-phase="finishing"] {
-    background: #D9B26F;
-    box-shadow: 0 0 10px rgba(217, 178, 111, 0.6);
-}
+.roulette-rail-dot[data-phase="idle"]      { background: rgba(159,182,187,1); }
+.roulette-rail-dot[data-phase="spin"]      { background: #FF8E72; box-shadow: 0 0 10px rgba(255,142,114,.6); animation: roulette-dot-pulse 1.4s ease-in-out infinite; }
+.roulette-rail-dot[data-phase="decel"]     { background: #F5C849; box-shadow: 0 0 10px rgba(245,200,73,.6);  animation: roulette-dot-pulse 1.4s ease-in-out infinite; }
+.roulette-rail-dot[data-phase="stop"]      { background: #FFCC4F; box-shadow: 0 0 10px rgba(255,204,79,.6); }
+.roulette-rail-dot[data-phase="reveal"]    { background: #E14B4B; box-shadow: 0 0 10px rgba(225,75,75,.6); animation: roulette-dot-pulse 1.4s ease-in-out infinite; }
+.roulette-rail-dot[data-phase="gap"]       { background: #C9B5E8; }
+.roulette-rail-dot[data-phase="finishing"] { background: #E14B4B; box-shadow: 0 0 10px rgba(225,75,75,.6); }
 @keyframes roulette-dot-pulse {
-    0%, 100% { opacity: 0.55; }
-    50%      { opacity: 1; }
+    0%, 100% { opacity: 0.55; transform: scale(0.92); }
+    50%      { opacity: 1; transform: scale(1.1); }
 }
 .roulette-rail-status-text {
-    font-size: 12.5px;
-    font-weight: 500;
-    color: rgba(232, 226, 210, 0.88);
+    font-size: 13px;
+    font-weight: 600;
+    color: #2A2A3C;
     letter-spacing: -0.1px;
 }
 .roulette-rail-chips {
@@ -3368,42 +3342,65 @@ a:focus-visible {
     overflow: hidden;
 }
 .roulette-rail-chips-label {
-    font-size: 11px;
-    font-weight: 500;
-    color: rgba(232, 226, 210, 0.55);
+    font-size: 11.5px;
+    font-weight: 600;
+    color: rgba(42,42,60,.62);
     letter-spacing: -0.05px;
+    margin-right: 4px;
 }
 .roulette-rail-chips-empty {
     font-size: 11.5px;
-    color: rgba(232, 226, 210, 0.32);
+    color: rgba(42,42,60,.32);
     font-style: italic;
 }
 .roulette-rail-chip {
     display: inline-flex;
     align-items: center;
     gap: 7px;
-    padding: 5px 12px;
-    background: rgba(232, 226, 210, 0.06);
-    border: 1px solid rgba(232, 226, 210, 0.13);
+    padding: 5px 12px 5px 6px;
+    background: #FFFFFF;
+    border: 1px solid #E9D4A1;
     border-radius: 999px;
-    font-size: 12px;
-    font-weight: 500;
-    color: rgba(244, 239, 223, 0.92);
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #2A2A3C;
     white-space: nowrap;
+    box-shadow: 0 2px 4px rgba(46,140,149,.08);
+}
+.roulette-rail-chip-pip {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Manrope', system-ui, sans-serif;
+    font-size: 9.5px;
+    font-weight: 800;
+    color: rgba(0,0,0,.6);
+    border: 1.4px solid #FFFAEC;
 }
 .roulette-rail-hint {
-    min-width: 140px;
+    min-width: 130px;
     display: flex;
     justify-content: flex-end;
     align-items: center;
 }
 .roulette-rail-hint-text {
-    font-size: 11px;
-    color: rgba(232, 226, 210, 0.55);
+    font-size: 11.5px;
+    color: rgba(42,42,60,.62);
     letter-spacing: -0.05px;
+    padding: 4px 9px;
+    border: 1.4px solid #2E8C95;
+    border-radius: 5px;
+    color: #2E8C95;
+    background: #FFFDF4;
+    font-weight: 700;
+    letter-spacing: 1.4px;
+    font-family: 'Manrope', system-ui, sans-serif;
 }
 
-/* ── 선발 완료 배너 (1.1초) ── */
+/* ── 선발 완료 배너 ── */
 .roulette-finish-banner {
     position: absolute;
     left: 50%;
@@ -3413,70 +3410,561 @@ a:focus-visible {
     font-weight: 700;
     font-size: clamp(2rem, 5vw, 3rem);
     letter-spacing: -0.04em;
-    color: #FBF6E6;
+    color: #2A2A3C;
     padding: 22px 44px;
-    background: rgba(10, 13, 27, 0.7);
-    border-top: 1.5px solid #F2D384;
-    border-bottom: 1px solid rgba(138, 110, 59, 0.7);
-    box-shadow: 0 28px 56px rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(14px) saturate(140%);
-    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    background: #FBF1D8;
+    border: 2px solid #E9D4A1;
+    border-radius: 18px;
+    box-shadow: 0 20px 44px rgba(46,140,149,.22), inset 0 1px 0 rgba(255,255,255,.6);
     opacity: 0;
     visibility: hidden;
-    z-index: 14;
+    z-index: 60;
     pointer-events: none;
-    white-space: nowrap;
 }
 .roulette-finish-banner.show {
     visibility: visible;
-    animation: roulette-finish-in 0.35s cubic-bezier(0.3, 0.95, 0.4, 1) both;
+    animation: roulette-finish-in 0.4s cubic-bezier(0.3, 0.95, 0.4, 1.08) both;
 }
 @keyframes roulette-finish-in {
-    0%   { opacity: 0; transform: translate(-50%, calc(-50% + 6px)); }
-    100% { opacity: 1; transform: translate(-50%, -50%); }
+    0%   { opacity: 0; transform: translate(-50%, calc(-50% + 8px)) scale(.96); }
+    100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
-/* ── 반응형 — 좁은 화면에서 plate 는 휠 아래 중앙으로 ── */
+/* ── 반응형 — 좁은 화면에서 reveal 은 휠 아래 중앙으로 ── */
 @media (max-width: 900px) {
-    .roulette-hud { height: 56px; padding: 0 14px; }
-    .roulette-hud-mark { width: 24px; height: 24px; font-size: 12px; }
+    .roulette-stage { --wheel-svg-size: min(60vh, 92vw, 520px); }
+
+    .roulette-hud { height: 56px; padding: 0 12px; }
+    .roulette-hud-left, .roulette-hud-right { padding: 6px 12px 6px 8px; gap: 8px; }
+    .roulette-hud-chip { width: 26px; height: 26px; font-size: 12px; }
     .roulette-hud-class { font-size: 13.5px; }
     .roulette-hud-sub { display: none; }
-    .roulette-hud-counter { font-size: 17px; }
+    .roulette-hud-counter { font-size: 16px; }
     .roulette-hud-bar { display: none; }
 
-    .roulette-rail { height: 64px; padding: 0 14px; gap: 10px; }
+    .roulette-rail { height: 64px; padding: 0 12px; gap: 10px; }
     .roulette-rail-status { min-width: 100px; }
     .roulette-rail-status-text { font-size: 11.5px; }
     .roulette-rail-chips-label { display: none; }
     .roulette-rail-hint { display: none; }
-    .roulette-rail-chip { padding: 4px 10px; font-size: 11.5px; }
+    .roulette-rail-chip { padding: 4px 10px 4px 5px; font-size: 11.5px; }
+    .roulette-rail-chip-pip { width: 18px; height: 18px; font-size: 8.5px; }
 
-    /* 휠 아래 중앙으로 plate 이동 — 작은 화면에서 plate 가 viewport 밖
-       으로 튀어나가는 걸 방지. 시각 연결(rail)은 숨김. */
+    /* reveal 위치를 휠 아래 중앙으로 — 작은 화면에서 plate 가 viewport 밖 튀어나가지 않게 */
     .roulette-reveal-wrap {
         left: 50%;
         top: auto;
-        bottom: 88px;
-        transform: translateX(-50%);
-        width: 100%;
-    }
-    .roulette-reveal-rail,
-    .roulette-reveal-finial { display: none; }
-    .roulette-reveal-panel {
-        position: relative;
-        top: auto;
-        left: 50%;
+        bottom: 90px;
+        margin-left: 0;
+        margin-top: 0;
         transform: translateX(-50%);
         width: min(420px, calc(100vw - 32px));
     }
-    .roulette-reveal-wrap.show .roulette-reveal-panel {
-        animation: roulette-plate-in-mobile 0.55s cubic-bezier(0.3, 0.95, 0.4, 1) 0.05s both;
+    .roulette-reveal-twine { display: none; }
+    .roulette-reveal-card { transform: rotate(0); min-height: 120px; padding: 14px 18px 16px 36px; }
+    .roulette-reveal-name { font-size: clamp(2rem, 7vw, 2.8rem); }
+    .roulette-reveal-wrap.show {
+        animation: roulette-pen-in-mobile 0.5s cubic-bezier(0.3, 0.95, 0.4, 1.08) 0.05s both;
     }
-    @keyframes roulette-plate-in-mobile {
+    @keyframes roulette-pen-in-mobile {
         0%   { opacity: 0; transform: translate(-50%, 12px); }
         100% { opacity: 1; transform: translate(-50%, 0); }
     }
+}
 
-    .roulette-floor-pool { display: none; }
+/* =========================================================
+   Fishing theme — Ocean Kitsch v3 (Causality)
+   themes/fishing.js 가 .fishing-stage 컨테이너와 자식 DOM을 동적으로
+   만들었다 cleanup 에서 제거한다. 밝은 aqua 무대 위 11종 해양동물이
+   유영하고, 잡힌 동물은 hook 과 같은 anchor 로 끌려 올라온다.
+   ========================================================= */
+
+/* 컨테이너 — 기존 분홍/보라 그라데이션 무효화하고 sky→water 그라데이션
+   전체 viewport 채우기. */
+.animation-container.fishing-active.fullscreen-animation {
+    background: linear-gradient(180deg, #EAF8F2 0%, #CDEFE3 9%, #A6E0D2 14%, #7BD3C2 26%, #48B6B0 62%, #2E8C95 92%);
+}
+.animation-container.fishing-active.fullscreen-animation::after { display: none; }
+
+/* animation-message 시각 숨김 (HUD/reveal 패널이 대체) */
+.animation-container.fishing-active .animation-message { display: none; }
+
+/* picked-students-live — display:none 금지. sr-only 패턴으로 시각만 숨김,
+   aria-live announce 유지. */
+.animation-container.fishing-active .picked-students-live {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+/* Pause button 위치 보정 — 기본 (.animation-controls: top 24, right 24) 이
+   fishing HUD (top 16, height 48 → bottom 64, right 24 의 ROUND 카운터 캡슐)
+   영역과 정확히 겹친다. fishing 활성 시에만 HUD 아래로 이동시켜 ROUND
+   카운터/progress bar 가 가려지지 않게 한다. lottery/roulette 영향 없음. */
+.animation-container.fishing-active .animation-controls {
+    top: 80px;        /* HUD bottom 64 + 16px 여백 */
+    right: 24px;
+    bottom: auto;
+    left: auto;
+    transform: none;
+}
+
+/* ── stage ── */
+.fishing-stage {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 6;
+    color: #0F2F36;
+    font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+    overflow: hidden;
+}
+.fishing-mono {
+    font-family: 'Manrope', 'Pretendard Variable', system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+}
+
+/* ── 배경 — current lines + sunlight rays + sand + seaweed (모두 풀-viewport) ── */
+.fishing-bg-svg, .fishing-sunlight-svg, .fishing-current-svg, .fishing-sand-svg {
+    position: absolute;
+    left: 0; right: 0;
+    pointer-events: none;
+    overflow: visible;
+}
+.fishing-bg-svg, .fishing-sunlight-svg, .fishing-current-svg {
+    top: 0;
+    width: 100%;
+    height: 100%;
+}
+.fishing-sand-svg {
+    bottom: 56px;
+    width: 100%;
+    height: 22vh;
+    max-height: 200px;
+    min-height: 120px;
+}
+.fishing-current-svg { mix-blend-mode: screen; opacity: 0.55; }
+.fishing-sunlight-svg { mix-blend-mode: screen; }
+
+/* ── bubbles — 소량(8개), 천천히 위로 ── */
+.fishing-bubble {
+    position: absolute;
+    bottom: -20px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.55);
+    border: 1.4px solid rgba(255, 255, 255, 0.85);
+    box-shadow: inset -2px -2px 0 rgba(255, 255, 255, 0.7);
+    animation: fi-bubble linear infinite;
+    pointer-events: none;
+}
+@keyframes fi-bubble {
+    0%   { transform: translateY(0) translateX(0); opacity: 0; }
+    10%  { opacity: 0.8; }
+    90%  { opacity: 0.5; }
+    100% { transform: translateY(-90vh) translateX(8px); opacity: 0; }
+}
+
+/* ── creature 배치 — JS 가 left/top px 계산, transition: opacity 만 ── */
+.fishing-creature {
+    position: absolute;
+    left: 0; top: 0;
+    transform: translate(-50%, -50%);
+    transition: opacity 0.4s ease;
+    will-change: left, top, transform;
+    pointer-events: none;
+}
+.fishing-creature svg {
+    display: block;
+    overflow: visible;
+}
+
+/* ── bite ring — 동물 주변 coral 펄스 (bite/hooked phase) ── */
+.fishing-bite-ring {
+    position: absolute;
+    left: 50%; top: 50%;
+    border-radius: 50%;
+    border: 2.4px solid #FF8E72;
+    box-shadow: 0 0 24px rgba(255, 142, 114, 0.7), inset 0 0 18px rgba(255, 142, 114, 0.35);
+    opacity: 0;
+    pointer-events: none;
+    animation: fi-ring 1.1s ease-in-out infinite;
+}
+.fishing-creature.bite-active .fishing-bite-ring { opacity: 0.9; }
+@keyframes fi-ring {
+    0%, 100% { transform: translate(-50%, -50%) scale(1); }
+    50%      { transform: translate(-50%, -50%) scale(1.06); }
+}
+
+/* ── hook SVG (전체 viewport, line + bobber + hook + twine) ── */
+.fishing-hook-svg, .fishing-twine-svg {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: visible;
+}
+.fishing-hook-svg { z-index: 20; }
+.fishing-twine-svg { z-index: 38; }
+
+/* ── reveal — 종이 태그 (settle 끝난 뒤 220ms delay) ── */
+.fishing-reveal-panel {
+    position: absolute;
+    left: 0; top: 0;
+    width: min(360px, calc(100vw - 32px));
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    z-index: 40;
+    transform-origin: left top;
+}
+.fishing-reveal-panel.show {
+    visibility: visible;
+    /* JS phaseT 게이트가 220ms 지연을 담당 — CSS 추가 delay 없음 */
+    animation: fi-tag-in 0.55s cubic-bezier(0.3, 0.95, 0.4, 1.08) both;
+}
+@keyframes fi-tag-in {
+    0%   { opacity: 0; transform: translateY(-12px) rotate(-8deg) scale(0.95); }
+    100% { opacity: 1; transform: translateY(0) rotate(0deg) scale(1); }
+}
+.fishing-reveal-card {
+    position: relative;
+    background: #FBF1D8;
+    border: 2px solid #E9D4A1;
+    border-radius: 16px;
+    box-shadow: 0 14px 32px rgba(8, 40, 48, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+    padding: 18px 22px 18px 36px;
+    box-sizing: border-box;
+    transform: rotate(-3deg);
+    min-height: 116px;
+}
+.fishing-reveal-grommet {
+    position: absolute;
+    left: -4px; top: 18px;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #F2D384, #8A6432);
+    border: 2.4px solid #FBF1D8;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.18);
+}
+.fishing-reveal-grommet::after {
+    content: '';
+    position: absolute;
+    left: 5px; top: 5px;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #3F2916;
+}
+.fishing-reveal-eyebrow {
+    font-family: 'Manrope', 'Pretendard Variable', system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 2.4px;
+    color: #8A6432;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+}
+.fishing-reveal-name {
+    font-family: 'Pretendard Variable', Pretendard, sans-serif;
+    font-weight: 700;
+    font-size: clamp(2rem, 4.8vw, 2.8rem);
+    line-height: 1;
+    letter-spacing: -0.04em;
+    color: #0F2F36;
+    margin-bottom: 8px;
+    word-break: keep-all;
+}
+.fishing-reveal-sub {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    color: rgba(15, 47, 54, 0.62);
+    font-weight: 600;
+}
+.fishing-reveal-sub::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #FF8E72;
+}
+
+/* ── twine — reveal 패널 SVG path 진입 ── */
+.fishing-twine-svg .fi-twine-path {
+    stroke: #A47A44;
+    stroke-width: 1.6;
+    fill: none;
+    stroke-linecap: round;
+    stroke-dasharray: 3 2.4;
+    opacity: 0;
+    filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.12));
+}
+.fishing-twine-svg.show .fi-twine-path {
+    /* JS phaseT 게이트가 220ms 지연을 담당 — CSS 추가 delay 없음 */
+    animation: fi-twine-in 0.45s cubic-bezier(0.3, 0.95, 0.4, 1.05) both;
+}
+@keyframes fi-twine-in {
+    0%   { opacity: 0; }
+    100% { opacity: 0.85; }
+}
+
+/* ── HUD 상단 ── */
+.fishing-hud {
+    position: absolute;
+    top: 16px; left: 24px; right: 24px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 60;
+}
+.fishing-hud-left, .fishing-hud-right {
+    display: flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.82);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-radius: 999px;
+    box-shadow: 0 4px 14px rgba(8, 40, 48, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+}
+.fishing-hud-left {
+    gap: 12px;
+    padding: 7px 16px 7px 9px;
+}
+.fishing-hud-right {
+    gap: 14px;
+    padding: 7px 16px;
+}
+.fishing-hud-mark {
+    width: 30px; height: 30px;
+    border-radius: 9px;
+    background: linear-gradient(135deg, #5FD0BD, #48B6B0);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 800;
+    font-size: 14px;
+    letter-spacing: -0.4px;
+    box-shadow: 0 2px 6px rgba(46, 140, 149, 0.4);
+}
+.fishing-hud-class {
+    font-size: 15px;
+    font-weight: 700;
+    color: #0F2F36;
+    letter-spacing: -0.3px;
+}
+.fishing-hud-sub {
+    font-size: 12.5px;
+    color: rgba(15, 47, 54, 0.62);
+    font-weight: 500;
+    margin-left: 8px;
+}
+.fishing-hud-label {
+    font-family: 'Manrope', system-ui, sans-serif;
+    font-size: 10.5px;
+    color: rgba(15, 47, 54, 0.62);
+    font-weight: 700;
+    letter-spacing: 2px;
+}
+.fishing-hud-counter {
+    font-family: 'Manrope', system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+    font-size: 18px;
+    color: #0F2F36;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: baseline;
+}
+.fishing-hud-divider { color: rgba(15, 47, 54, 0.32); margin: 0 1px; }
+.fishing-hud-total { color: rgba(15, 47, 54, 0.4); font-weight: 500; }
+.fishing-hud-bar {
+    display: flex;
+    gap: 3px;
+    margin-left: 2px;
+}
+.fishing-hud-bar-cell {
+    width: 12px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(15, 47, 54, 0.14);
+    transition: background 0.4s ease, box-shadow 0.4s ease;
+}
+.fishing-hud-bar-cell.filled {
+    background: linear-gradient(90deg, #FF8E72, #E14B4B);
+    box-shadow: 0 0 6px rgba(255, 142, 114, 0.45);
+}
+
+/* ── 하단 rail ── */
+.fishing-rail {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 56px;
+    background: linear-gradient(180deg, rgba(248, 237, 210, 0) 0%, rgba(248, 237, 210, 0.92) 35%, rgba(248, 237, 210, 1) 100%);
+    border-top: 1px solid #E9D4A1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    z-index: 50;
+    gap: 16px;
+    box-sizing: border-box;
+}
+.fishing-rail-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 200px;
+}
+.fishing-rail-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--fi-dot, #9FB6BB);
+    box-shadow: 0 0 10px var(--fi-dot, transparent);
+    transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+.fishing-rail-dot.pulse {
+    animation: fi-dot 1.4s ease-in-out infinite;
+}
+@keyframes fi-dot {
+    0%, 100% { opacity: 0.55; transform: scale(0.92); }
+    50%      { opacity: 1;    transform: scale(1.1); }
+}
+.fishing-rail-status-text {
+    font-size: 13px;
+    color: #0F2F36;
+    font-weight: 600;
+    letter-spacing: -0.1px;
+}
+.fishing-rail-chips {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    justify-content: center;
+    flex-wrap: wrap;
+    min-width: 0;
+    overflow: hidden;
+}
+.fishing-rail-chips-label {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: rgba(15, 47, 54, 0.62);
+}
+.fishing-rail-chips-empty {
+    font-size: 11.5px;
+    color: rgba(15, 47, 54, 0.4);
+    font-style: italic;
+}
+.fishing-rail-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 12px 4px 4px;
+    background: #FFFFFF;
+    border: 1px solid #E9D4A1;
+    border-radius: 999px;
+    font-size: 12px;
+    color: #0F2F36;
+    font-weight: 600;
+    box-shadow: 0 2px 4px rgba(8, 40, 48, 0.06);
+    white-space: nowrap;
+}
+.fishing-rail-chip-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: #fff;
+    font-weight: 700;
+}
+.fishing-rail-hint {
+    min-width: 160px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+}
+.fishing-rail-hint-text {
+    font-size: 11.5px;
+    color: rgba(15, 47, 54, 0.55);
+    letter-spacing: -0.05px;
+}
+
+/* ── 선발 완료 배너 (1.1초) ── */
+.fishing-finish-banner {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Pretendard Variable', Pretendard, sans-serif;
+    font-weight: 700;
+    font-size: clamp(2rem, 5vw, 3rem);
+    letter-spacing: -0.04em;
+    color: #0F2F36;
+    padding: 22px 44px;
+    background: rgba(251, 241, 216, 0.92);
+    border-top: 1.5px solid #F2D384;
+    border-bottom: 1px solid rgba(138, 100, 50, 0.7);
+    box-shadow: 0 28px 56px rgba(8, 40, 48, 0.25);
+    backdrop-filter: blur(8px) saturate(140%);
+    -webkit-backdrop-filter: blur(8px) saturate(140%);
+    opacity: 0;
+    visibility: hidden;
+    z-index: 70;
+    pointer-events: none;
+    white-space: nowrap;
+}
+.fishing-finish-banner.show {
+    visibility: visible;
+    animation: fi-finish-in 0.35s cubic-bezier(0.3, 0.95, 0.4, 1) both;
+}
+@keyframes fi-finish-in {
+    0%   { opacity: 0; transform: translate(-50%, calc(-50% + 6px)); }
+    100% { opacity: 1; transform: translate(-50%, -50%); }
+}
+
+/* ── 반응형 ── */
+@media (max-width: 900px) {
+    .fishing-hud { left: 12px; right: 12px; height: 44px; top: 12px; }
+    .fishing-hud-left { padding: 5px 12px 5px 6px; }
+    .fishing-hud-right { padding: 5px 12px; gap: 10px; }
+    .fishing-hud-mark { width: 26px; height: 26px; font-size: 12px; border-radius: 7px; }
+    .fishing-hud-class { font-size: 13.5px; }
+    .fishing-hud-sub { display: none; }
+    .fishing-hud-counter { font-size: 16px; }
+    .fishing-hud-bar { display: none; }
+
+    .fishing-rail { height: 48px; padding: 0 12px; gap: 10px; }
+    .fishing-rail-status { min-width: 90px; }
+    .fishing-rail-status-text { font-size: 12px; }
+    .fishing-rail-chips-label { display: none; }
+    .fishing-rail-hint { display: none; }
+    .fishing-rail-chip { font-size: 11.5px; }
+    .fishing-rail-chip-icon { width: 18px; height: 18px; font-size: 11px; }
+
+    .fishing-sand-svg { bottom: 40px; min-height: 100px; }
+
+    /* fishing 모바일 — 기본 mobile override (bottom:24 center) 가 fishing rail
+       (height 48) 위로 올라타므로, fishing 활성 시는 HUD 아래 우상단으로 고정. */
+    .animation-container.fishing-active .animation-controls {
+        top: 64px;        /* fishing HUD mobile: top 12 + height 44 → 56 + 8 여백 */
+        right: 12px;
+        bottom: auto;
+        left: auto;
+        transform: none;
+    }
 }

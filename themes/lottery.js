@@ -1,8 +1,10 @@
-// 로또 테마 — Broadcast Studio v2
+// 로또 테마 — Bright Kitsch Arcade
 //
-// 디자인 방향: 깊은 navy 무대 + 브래스 트림의 유리 튜브, 6컬러 단색
-// 컬러볼 14개가 통 안을 부드럽게 유영하다가 한 개씩 좌상단 외부로
-// 떠올라 박물관 라벨형 reveal 패널과 짝지어진다.
+// 디자인 방향: cream/coral/lemon/mint 의 밝은 파스텔 아케이드 부스.
+// 둥근 acrylic 글로브 안에서 8 컬러 컬러볼이 섞이다가 winner 가
+// 짧은 투명 슈트를 따라 펠트 트레이로 굴러 안착, 종이 태그가
+// twine 으로 옆에 매달려 이름이 reveal 된다.
+// SVG + HTML 오버레이 + RAF 단일 2D 물리 (Three.js 사용하지 않음).
 //
 // 안전 로직 (절대 깨면 안 됨):
 //  - runLotteryAnimation(canvas, selectedStudents, addPickedStudent) 시그니처
@@ -11,299 +13,105 @@
 //  - pickingMessage() Math.min clamp — 3/2 카운터 버그 재발 방지
 //  - 첫 프레임 render 후 메시지 업데이트 순서 (검은 화면에 글자만 뜨는 것 방지)
 //  - window.AppState.isPaused / shouldStop 처리
-//  - addPickedStudent 호출은 종전 흐름 유지 (학생 공이 자리 잡은 직후 1회)
+//  - addPickedStudent 호출은 reveal 진입 직후 1회 (현재 launching→reveal 흐름과 동일 시멘틱)
 //  - 마지막 reveal 후 bgMusicInterval 을 stop + null 설정 — app.js 후속 stop 충돌 방지
 //  - resize 리스너 cleanup, 동적 lottery DOM cleanup
-//  - 공은 완전한 구형 유지 — scale 은 setScalar 만 사용, squash/stretch 금지
+//  - 공은 완전한 구형처럼 보여야 하며 squash/stretch 금지 — DOM ball 의 transform 은
+//    translate + rotate(z) 만 사용. winner emphasis 시점에 균등 scale 약간(1.0→1.06).
 
 async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
     return new Promise((resolve) => {
-        // ── 디자인 토큰 ──────────────────────────────────────
-        const BRASS_HI = 0xE8CA8A;
-        const BRASS_MID = 0xC9A668;
-        const BRASS_LO = 0x7A5E33;
+        // ── 디자인 토큰 (Bright Kitsch Arcade)
+        const AR = {
+            cream:    '#FFF6E2',
+            paper:    '#FBF1D8',
+            paperEdge:'#E9D4A1',
+            ink:      '#2A2A3C',
+            inkSoft:  'rgba(42,42,60,.62)',
+            inkFaint: 'rgba(42,42,60,.32)',
+            coral:    '#FF8E72',
+            coralLo:  '#E14B4B',
+            mint:     '#5FD0BD',
+            sun:      '#F5C849',
+            lemon:    '#FFCC4F',
+            wood:     '#D8A36B',
+            woodLo:   '#9B6B3A',
+            twine:    '#A47A44',
+        };
 
-        // Crimson · Amber · Cobalt · Emerald · Plum · Dijon — 단색 6종
+        // 8 컬러 컬러볼 — 단색 + radial gradient 로 매끈한 sphere 표현
+        // (찌그러짐/반반 공/검은 공 금지. 표면 텍스처 일체 없음.)
         const BALL_PALETTE = [
-            { core: 0xD03B4F, hex: '#D03B4F' },
-            { core: 0xE89A2D, hex: '#E89A2D' },
-            { core: 0x3A6FD8, hex: '#3A6FD8' },
-            { core: 0x2D9970, hex: '#2D9970' },
-            { core: 0x8358BD, hex: '#8358BD' },
-            { core: 0xD9C26B, hex: '#D9C26B' },
+            { c: '#FF8E72', l: '#FFD3C2', d: '#C95E45' }, // coral
+            { c: '#FFCC4F', l: '#FFE9A8', d: '#C99320' }, // lemon
+            { c: '#5FD0BD', l: '#B6EDE2', d: '#2E8C95' }, // mint
+            { c: '#9FCEE9', l: '#C0DDF0', d: '#3578A8' }, // sky
+            { c: '#C9B5E8', l: '#E5DAF4', d: '#7B66A8' }, // lavender
+            { c: '#FFB39B', l: '#FFD9CC', d: '#C97A60' }, // peach
+            { c: '#FF9BAA', l: '#FFCBD2', d: '#C95F70' }, // rose
+            { c: '#A7DD7A', l: '#D7EDB8', d: '#5F9D3F' }, // pistachio
         ];
 
-        const TOTAL_BALLS = 14;
-        const TUBE_R = 1.4;
-        const TUBE_H = 4.2;
-        const BALL_R = 0.18;
+        // ── 글로브 / 공 기하학 (SVG 1280×800 좌표계 기준 — viewport 비례 스케일됨)
+        const GLOBE_R = 150;          // 글로브 내부 반지름
+        const BALL_R = 22;            // 공 반지름
+        const TOTAL_BALLS = 12;
+        const GLOBE_CX = 640;         // 글로브 중심 X
+        const GLOBE_CY = 392;         // 글로브 중심 Y (상단 지붕 영역 확보)
 
-        // ── Three.js 셋업 ──────────────────────────────────
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x03050D);
-        scene.fog = new THREE.Fog(0x03050D, 20, 36);
+        // 짧은 슈트 — globe spout 출구 → tray 안착점
+        const CHUTE = {
+            start: { x: 0,   y: 158 }, // globe 내부 좌표 (centered at GLOBE_CX, GLOBE_CY)
+            c1:    { x: 14,  y: 192 },
+            c2:    { x: -6,  y: 218 },
+            end:   { x: 0,   y: 232 },
+        };
 
-        const camera = new THREE.PerspectiveCamera(
-            45,
-            window.innerWidth / window.innerHeight,
-            0.1,
-            100
-        );
+        // 물리 파라미터 (2D radial chamber)
+        const MIX_SPEED = 320;
+        const IDLE_SPEED = 70;
+        const DRIFT = 4.6;
+        const CONVERGE = 1.7;
+        const WALL_REST = 0.65;
+        const BALL_REST = 0.86;
+        const DAMP = 0.997;
+        const MAX_V = 540;
 
-        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        if ('outputEncoding' in renderer) renderer.outputEncoding = THREE.sRGBEncoding;
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        // ── timing (ms) — 첫 mix 만 길게, 이후 라운드는 짧게
+        const T = {
+            mixFirst: 2400,
+            mix: 1300,
+            eject: 800,
+            settle: 380,
+            reveal: 1600,
+            gap: 480,
+            finishHold: 1100,
+        };
 
-        // ── 조명 — 신중하게, 네온 금지, 브래스톤 키 라이트 중심 ──
-        // Ambient 는 낮추고 Hemisphere 가 위·아래 색 편향을 담당.
-        // 플라스틱 clearcoat 의 dome highlight 가 직접광에서 잘 보이도록 키를 약간 올림.
-        const ambient = new THREE.AmbientLight(0xffffff, 0.18);
-        scene.add(ambient);
-
-        // 위는 차가운 빛, 아래는 따뜻한 반사 — 단색 컬러볼이 자연스럽게 떠 보임
-        const hemiLight = new THREE.HemisphereLight(0xb8c5dd, 0x3a2e1f, 0.28);
-        hemiLight.position.set(0, 1, 0);
-        scene.add(hemiLight);
-
-        const keyLight = new THREE.DirectionalLight(0xfff0d0, 1.15);
-        keyLight.position.set(1.5, 8, 6);
-        keyLight.castShadow = true;
-        keyLight.shadow.mapSize.set(1024, 1024);
-        keyLight.shadow.camera.near = 1;
-        keyLight.shadow.camera.far = 30;
-        scene.add(keyLight);
-
-        const fillLight = new THREE.DirectionalLight(0xa0c0ff, 0.22);
-        fillLight.position.set(-6, 2, 4);
-        scene.add(fillLight);
-
-        const rimLight = new THREE.DirectionalLight(0xffffff, 0.38);
-        rimLight.position.set(2, 4, -6);
-        scene.add(rimLight);
-
-        // 바닥 라이트풀 효과를 위한 약한 따뜻한 포인트
-        const warmFloor = new THREE.PointLight(0xfff0d0, 0.4, 8, 2.0);
-        warmFloor.position.set(0, -TUBE_H / 2 - 0.4, 1.8);
-        scene.add(warmFloor);
-
-        // ── 튜브 (브래스 캡 + 유리 바디 + 브래스 베이스) ──
-        const tubeGroup = new THREE.Group();
-
-        // 유리 바디 — MeshStandardMaterial, transparent + 낮은 opacity
-        const glassMat = new THREE.MeshStandardMaterial({
-            color: 0xa8b8d8,
-            transparent: true,
-            opacity: 0.18,
-            roughness: 0.08,
-            metalness: 0.0,
-            side: THREE.DoubleSide,
-            depthWrite: false,
-        });
-        const glass = new THREE.Mesh(
-            new THREE.CylinderGeometry(TUBE_R, TUBE_R, TUBE_H, 64, 1, true),
-            glassMat
-        );
-        tubeGroup.add(glass);
-
-        // 내부 안쪽 면 살짝 더 어둡게 — 깊이감
-        const innerShadowMat = new THREE.MeshBasicMaterial({
-            color: 0x000814,
-            transparent: true,
-            opacity: 0.12,
-            side: THREE.BackSide,
-            depthWrite: false,
-        });
-        const innerShadow = new THREE.Mesh(
-            new THREE.CylinderGeometry(TUBE_R - 0.005, TUBE_R - 0.005, TUBE_H - 0.02, 64, 1, true),
-            innerShadowMat
-        );
-        tubeGroup.add(innerShadow);
-
-        // 브래스 머티리얼
-        const brassMidMat = new THREE.MeshStandardMaterial({
-            color: BRASS_MID, metalness: 0.88, roughness: 0.36,
-        });
-        const brassHiMat = new THREE.MeshStandardMaterial({
-            color: BRASS_HI, metalness: 0.9, roughness: 0.3,
-        });
-
-        // 상단 브래스 림 (토러스)
-        const topRing = new THREE.Mesh(
-            new THREE.TorusGeometry(TUBE_R, 0.08, 16, 64),
-            brassHiMat
-        );
-        topRing.rotation.x = Math.PI / 2;
-        topRing.position.y = TUBE_H / 2;
-        tubeGroup.add(topRing);
-
-        // 상단 어두운 구멍 (입구 깊이감)
-        const topHoleDisc = new THREE.Mesh(
-            new THREE.CircleGeometry(TUBE_R - 0.08, 32),
-            new THREE.MeshBasicMaterial({ color: 0x03050D })
-        );
-        topHoleDisc.rotation.x = -Math.PI / 2;
-        topHoleDisc.position.y = TUBE_H / 2 + 0.005;
-        tubeGroup.add(topHoleDisc);
-
-        // 하단 브래스 베이스 (페디스털)
-        const baseHeight = 0.5;
-        const base = new THREE.Mesh(
-            new THREE.CylinderGeometry(TUBE_R + 0.22, TUBE_R + 0.38, baseHeight, 64),
-            brassMidMat
-        );
-        base.position.y = -TUBE_H / 2 - baseHeight / 2;
-        base.receiveShadow = true;
-        base.castShadow = true;
-        tubeGroup.add(base);
-
-        // 베이스 상단 hairline 링
-        const baseHairline = new THREE.Mesh(
-            new THREE.TorusGeometry(TUBE_R + 0.22, 0.012, 8, 64),
-            brassHiMat
-        );
-        baseHairline.rotation.x = Math.PI / 2;
-        baseHairline.position.y = -TUBE_H / 2 - 0.005;
-        tubeGroup.add(baseHairline);
-
-        // 중앙 브래스 plaque
-        const plaque = new THREE.Mesh(
-            new THREE.CircleGeometry(0.13, 32),
-            brassHiMat
-        );
-        plaque.rotation.x = -Math.PI / 2;
-        plaque.position.y = -TUBE_H / 2 + 0.002;
-        tubeGroup.add(plaque);
-
-        scene.add(tubeGroup);
-
-        // 그림자 받는 바닥 (눈에 띄지 않게)
-        const floorMat = new THREE.ShadowMaterial({ opacity: 0.4 });
-        const floor = new THREE.Mesh(
-            new THREE.PlaneGeometry(12, 12),
-            floorMat
-        );
-        floor.rotation.x = -Math.PI / 2;
-        floor.position.y = -TUBE_H / 2 - baseHeight - 0.001;
-        floor.receiveShadow = true;
-        scene.add(floor);
-
-        // ── 공들 — 단색, 완전 구형 (squash/stretch 절대 금지) ──
-        // 표면 텍스처·번호·이름·반반 색·CanvasTexture 일체 사용하지 않는다.
-        // 매끈한 플라스틱 로또볼: MeshPhysicalMaterial + clearcoat 로
-        // 베이스 컬러 위 lacquer 층의 dome highlight 표현. emissive 는
-        // baseline 0 (자체 발광 금지) — winner launch 시점에만 약하게 사용.
-        const balls = [];
-        const ballGeom = new THREE.SphereGeometry(BALL_R, 48, 32);
-
-        for (let i = 0; i < TOTAL_BALLS; i++) {
-            const palette = BALL_PALETTE[i % BALL_PALETTE.length];
-            const mat = new THREE.MeshPhysicalMaterial({
-                color: palette.core,
-                roughness: 0.28,
-                metalness: 0.0,
-                clearcoat: 0.8,
-                clearcoatRoughness: 0.12,
-                reflectivity: 0.5,
-            });
-            const ball = new THREE.Mesh(ballGeom, mat);
-            ball.castShadow = true;
-            ball.userData = {
-                index: i,
-                palette,
-                vx: 0, vy: 0, vz: 0,
-                targetAngleH: Math.random() * Math.PI * 2,
-                targetAngleV: (Math.random() - 0.5) * 0.6,
-                isWinner: false,
-                launchT: 0,
-                launchFrom: null,
-            };
-
-            // 통 내부에 분산 배치
-            const r = Math.random() * (TUBE_R - 0.3);
-            const theta = Math.random() * Math.PI * 2;
-            ball.position.set(
-                Math.cos(theta) * r,
-                (Math.random() - 0.5) * (TUBE_H - 0.6),
-                Math.sin(theta) * r
-            );
-
-            tubeGroup.add(ball);
-            balls.push(ball);
-        }
-
-        // separation pass — 초기 위치가 서로 겹치지 않도록 (chat1.md 명시)
-        for (let iter = 0; iter < 10; iter++) {
-            for (let i = 0; i < balls.length; i++) {
-                for (let j = i + 1; j < balls.length; j++) {
-                    const a = balls[i].position;
-                    const b = balls[j].position;
-                    const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
-                    const d = Math.hypot(dx, dy, dz);
-                    const min = 2 * BALL_R + 0.02;
-                    if (d < min && d > 0.001) {
-                        const nx = dx / d, ny = dy / d, nz = dz / d;
-                        const push = (min - d) * 0.5;
-                        a.x -= nx * push; a.y -= ny * push; a.z -= nz * push;
-                        b.x += nx * push; b.y += ny * push; b.z += nz * push;
-                    }
-                }
-            }
-        }
-
-        // ── 상태 ────────────────────────────────────────────
+        // ── 상태
         let currentPickIndex = 0;
-        let phase = 'mixing';
-        // chat1.md 의 최종 권장 시퀀스 — 첫 mix 2.8s, 이후는 1.4s 로 단축
-        const MIX_DURATION_FIRST = 2800;
-        const MIX_DURATION_NEXT = 1400;
-        let currentMixDur = MIX_DURATION_FIRST;
-        let mixStartT = performance.now();
+        let phase = 'mix';
         let phaseStartT = performance.now();
-        let currentWinner = null;
-        let isComplete = false;        // 카운터 메시지가 '선발 완료'를 덮어쓰는 것 방지
-        let isDisposed = false;        // RAF 잔존으로 다른 테마 canvas 오염 방지
+        let mixDur = T.mixFirst;
+        let winnerIdx = -1;             // 현 라운드 winner ball index (balls[] 내부 색 index 와 무관)
+        let isComplete = false;
+        let isDisposed = false;
         let rafId = null;
+        let pauseStartT = null;
         let lastT = performance.now();
         let bgMusicStopped = false;
         let completeTimerId = null;
 
-        // 어항 부유 물리 — chat1.md "어항/무중력 부유 모델"
-        // (이전 v2 가 중력+임펄스로 천장에 붙는 버그가 있었음)
-        const MIX_SPEED = 2.4;
-        const IDLE_SPEED = 1.0;
-        const SETTLE_SPEED = 0.7;
-        const DRIFT_RATE = 4.0;
-        const CONVERGE = 2.5;
-        const DAMPING = 0.998;
-        const WALL_REST = 0.5;
-        const BALL_REST = 0.85;
-        const MAX_SPEED = 5.0;
+        // ── threeCanvas 가리기 — SVG/HTML 만 사용
+        if (canvas && canvas.style) canvas.style.display = 'none';
 
-        // ── 오버레이 DOM ───────────────────────────────────
-        const container = canvas.parentElement;  // #animationContainer
+        // ── 컨테이너 셋업
+        const container = canvas.parentElement; // #animationContainer
         const stage = document.createElement('div');
         stage.className = 'lottery-stage';
         stage.setAttribute('aria-hidden', 'true');
 
-        // 분위기 (vignette + floor pool + dust motes)
-        const atmosphere = document.createElement('div');
-        atmosphere.className = 'lottery-atmosphere';
-        let atmosphereHtml = '<div class="lottery-vignette"></div><div class="lottery-floor-pool"></div>';
-        for (let i = 0; i < 16; i++) {
-            const x = (i * 41) % 100;
-            const y = 30 + ((i * 23) % 60);
-            const dur = 8 + (i % 5) * 2;
-            const sz = 1.5 + (i % 3);
-            const mx = (i % 3 - 1) * 14;
-            atmosphereHtml += `<span class="lottery-mote" style="left:${x}%;top:${y}%;width:${sz}px;height:${sz}px;animation-duration:${dur}s;animation-delay:${(i * 0.4).toFixed(1)}s;--mx:${mx}px;"></span>`;
-        }
-        atmosphere.innerHTML = atmosphereHtml;
-        stage.appendChild(atmosphere);
-
-        // HUD 상단
+        // ── 학급 라벨 (HUD 에 사용)
         const first = selectedStudents[0] || {};
         const sameGrade = selectedStudents.every(s => s && s.grade === first.grade);
         const sameClass = selectedStudents.every(s => s && s.class === first.class);
@@ -313,21 +121,377 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
         } else if (first.grade && sameGrade) {
             classLabel = `${first.grade}학년`;
         }
-
         const total = selectedStudents.length;
         const barSegments = Math.max(1, Math.min(total, 12));
 
+        // ── 부스/배경 SVG (정적 — 한 번만 생성)
+        // 모든 SVG 는 viewBox 0 0 1280 800, preserveAspectRatio="xMidYMid slice"
+        // 으로 viewport 에 채워진다. 장치(globe/cat/chute/tray)도 같은 좌표계에서
+        // 비례 스케일되어 viewport height 의 ~60% 를 점유한다.
+        const bgSvgNS = 'http://www.w3.org/2000/svg';
+        const boothSvg = document.createElementNS(bgSvgNS, 'svg');
+        boothSvg.setAttribute('class', 'lottery-booth-svg');
+        boothSvg.setAttribute('viewBox', '0 0 1280 800');
+        boothSvg.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+
+        boothSvg.innerHTML = `
+            <defs>
+                <radialGradient id="lo-stage" cx="0.5" cy="0.4" r="0.85">
+                    <stop offset="0%"  stop-color="#FFFCEF"/>
+                    <stop offset="62%" stop-color="#FBE9BD"/>
+                    <stop offset="100%" stop-color="#E7C684"/>
+                </radialGradient>
+                <pattern id="lo-dots" x="0" y="0" width="34" height="34" patternUnits="userSpaceOnUse">
+                    <circle cx="17" cy="17" r="1.8" fill="rgba(155,107,58,0.16)"/>
+                </pattern>
+                <linearGradient id="lo-wood" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%"  stop-color="#E0AC75"/>
+                    <stop offset="60%" stop-color="#C18548"/>
+                    <stop offset="100%" stop-color="#9B6B3A"/>
+                </linearGradient>
+                <linearGradient id="lo-awn" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%"  stop-color="#FF8E72"/>
+                    <stop offset="100%" stop-color="#E66E55"/>
+                </linearGradient>
+                <linearGradient id="lo-rim" x1="0.3" y1="0" x2="0.7" y2="1">
+                    <stop offset="0%"  stop-color="#FFEAA0"/>
+                    <stop offset="45%" stop-color="#F5C849"/>
+                    <stop offset="100%" stop-color="#9B6B3A"/>
+                </linearGradient>
+                <radialGradient id="lo-glass" cx="0.35" cy="0.3" r="0.85">
+                    <stop offset="0%"  stop-color="rgba(255,255,255,0.92)"/>
+                    <stop offset="55%" stop-color="rgba(255,250,236,0.55)"/>
+                    <stop offset="100%" stop-color="rgba(166,224,210,0.35)"/>
+                </radialGradient>
+                <radialGradient id="lo-glass-shade" cx="0.5" cy="0.88" r="0.55">
+                    <stop offset="0%"  stop-color="rgba(46,140,149,0.25)"/>
+                    <stop offset="100%" stop-color="rgba(46,140,149,0)"/>
+                </radialGradient>
+                <linearGradient id="lo-bow" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%"  stop-color="#FFB39B"/>
+                    <stop offset="100%" stop-color="#E14B4B"/>
+                </linearGradient>
+                <radialGradient id="lo-trophy-ball" cx="0.35" cy="0.3" r="0.75">
+                    <stop offset="0%"  stop-color="#FFD3C2"/>
+                    <stop offset="48%" stop-color="#FF8E72"/>
+                    <stop offset="100%" stop-color="#C95E45"/>
+                </radialGradient>
+            </defs>
+
+            <!-- 무대 배경 -->
+            <rect width="1280" height="800" fill="url(#lo-stage)"/>
+            <rect width="1280" height="800" fill="url(#lo-dots)" opacity="0.55"/>
+            <ellipse cx="640" cy="400" rx="420" ry="260" fill="#FFE9A8" opacity="0.6"/>
+
+            <!-- 박공 지붕 (한글 "로또" 제거, "LOTTO" 영문만, awning scallop circles 제거, 술 제거) -->
+            <g>
+                <!-- finial star -->
+                <g transform="translate(640 70)">
+                    <line x1="0" y1="0" x2="0" y2="-22" stroke="#9B6B3A" stroke-width="2.5"/>
+                    <path d="M 0 -32 L 2 -23 L 12 -23 L 4 -18 L 7 -9 L 0 -14 L -7 -9 L -4 -18 L -12 -23 L -2 -23 Z"
+                        fill="#F5C849" stroke="#9B6B3A" stroke-width="1.4" stroke-linejoin="round"/>
+                    <circle cx="0" cy="0" r="3" fill="#F5C849" stroke="#9B6B3A" stroke-width="0.8"/>
+                </g>
+
+                <!-- 박공 삼각형 (coral) -->
+                <path d="M 640 72 L 280 160 L 1000 160 Z"
+                    fill="url(#lo-awn)" stroke="#C95E45" stroke-width="3" stroke-linejoin="round"/>
+                <!-- 박공 하이라이트 라인 -->
+                <path d="M 640 88 L 320 158" stroke="rgba(255,255,255,.36)" stroke-width="2.2" fill="none"/>
+                <path d="M 640 88 L 960 158" stroke="rgba(255,255,255,.36)" stroke-width="2.2" fill="none"/>
+
+                <!-- LOTTO 영문 간판 (cream 패널 + Manrope 800w) -->
+                <g transform="translate(640 132)">
+                    <rect x="-122" y="-22" width="244" height="44" rx="10"
+                        fill="#FFFAEC" stroke="#C95E45" stroke-width="2.2"/>
+                    <text x="0" y="2" text-anchor="middle" dy="0.34em"
+                        font-family="Manrope, system-ui, sans-serif"
+                        font-size="28" font-weight="800"
+                        fill="#C95E45" letter-spacing="6">LOTTO</text>
+                </g>
+
+                <!-- 지붕 beam (wood) -->
+                <rect x="250" y="160" width="740" height="14" fill="url(#lo-wood)" stroke="#9B6B3A" stroke-width="1"/>
+                <rect x="254" y="162" width="732" height="3" rx="1" fill="rgba(255,255,255,.42)"/>
+
+                <!-- 측면 기둥 -->
+                <rect x="242" y="156" width="12" height="76" fill="#C18548" rx="3"/>
+                <rect x="986" y="156" width="12" height="76" fill="#C18548" rx="3"/>
+                <circle cx="248" cy="158" r="6" fill="url(#lo-wood)" stroke="#9B6B3A" stroke-width="0.6"/>
+                <circle cx="992" cy="158" r="6" fill="url(#lo-wood)" stroke="#9B6B3A" stroke-width="0.6"/>
+            </g>
+
+            <!-- 둥근 글로브 챔버 (중앙 ${GLOBE_CX}, ${GLOBE_CY}) -->
+            <g transform="translate(${GLOBE_CX} ${GLOBE_CY})">
+                <!-- 그림자 -->
+                <ellipse cx="0" cy="178" rx="156" ry="13" fill="rgba(60,40,20,.32)"/>
+
+                <!-- 3 wood 발 -->
+                ${[[-92, 150], [0, 158], [92, 150]].map(([cx, cy]) => `
+                    <g transform="translate(${cx} ${cy})">
+                        <ellipse cx="0" cy="7" rx="20" ry="11" fill="rgba(60,40,20,.32)"/>
+                        <ellipse cx="0" cy="0" rx="22" ry="13" fill="url(#lo-wood)" stroke="#9B6B3A" stroke-width="1"/>
+                        <ellipse cx="0" cy="-3" rx="18" ry="4" fill="rgba(255,255,255,.22)"/>
+                        <circle cx="0" cy="1" r="3" fill="#FFE9A8" stroke="#9B6B3A" stroke-width="0.6"/>
+                    </g>
+                `).join('')}
+
+                <!-- 외부 brass ring -->
+                <circle r="158" fill="url(#lo-rim)"/>
+                <circle r="158" fill="none" stroke="#9B6B3A" stroke-width="1.2"/>
+                <path d="M -158 0 A 158 158 0 0 1 0 -158" stroke="rgba(255,255,255,.7)" stroke-width="3" fill="none"/>
+                <path d="M 158 0 A 158 158 0 0 1 0 158" stroke="rgba(0,0,0,.25)" stroke-width="2" fill="none"/>
+                <circle r="150" fill="none" stroke="#9B6B3A" stroke-width="1" opacity="0.4"/>
+
+                <!-- 유리 acrylic body -->
+                <circle r="${GLOBE_R}" fill="url(#lo-glass)" stroke="rgba(155,107,58,.45)" stroke-width="1.4"/>
+                <circle r="${GLOBE_R}" fill="url(#lo-glass-shade)"/>
+
+                <!-- specular highlight (1개만, 시안 3개 → 1개로 축소) -->
+                <ellipse cx="-60" cy="-72" rx="48" ry="32" fill="rgba(255,255,255,.55)"/>
+                <ellipse cx="-74" cy="-92" rx="14" ry="8" fill="rgba(255,255,255,.92)"/>
+
+                <!-- 적도 marquee 전구 (정적 — keyframes 없이 단순 배치) -->
+                ${Array.from({ length: 9 }).map((_, i) => {
+                    const deg = 205 + i * (130 / 8);
+                    const a = deg * Math.PI / 180;
+                    const x = 158 * Math.cos(a);
+                    const y = 158 * Math.sin(a);
+                    return `<g transform="translate(${x.toFixed(2)} ${y.toFixed(2)})">
+                        <circle r="6.5" fill="#FFE9A8" stroke="#C99320" stroke-width="0.6"/>
+                        <circle r="3.6" fill="#FFFFFF"/>
+                    </g>`;
+                }).join('')}
+
+                <!-- ※ 글로브 하단 LOTTO 뱃지는 제거 (간판에 LOTTO 가 있으므로 중복 금지) -->
+
+                <!-- 코랄 리본 ornament (상단) -->
+                <g transform="translate(0 -160)">
+                    <path d="M -4 4 L -16 18 L -10 20 Z" fill="#E14B4B"/>
+                    <path d="M 4 4 L 16 18 L 10 20 Z" fill="#E14B4B"/>
+                    <path d="M -3 -1 Q -22 -12 -26 -2 Q -22 8 -3 -1 Z" fill="url(#lo-bow)" stroke="#C95E45" stroke-width="1"/>
+                    <path d="M 3 -1 Q 22 -12 26 -2 Q 22 8 3 -1 Z" fill="url(#lo-bow)" stroke="#C95E45" stroke-width="1"/>
+                    <path d="M -20 -5 Q -12 -5 -7 -2" stroke="rgba(255,255,255,.55)" stroke-width="1.2" fill="none"/>
+                    <path d="M 20 -5 Q 12 -5 7 -2" stroke="rgba(255,255,255,.55)" stroke-width="1.2" fill="none"/>
+                    <ellipse cx="0" cy="-1" rx="7" ry="9" fill="#FF8E72" stroke="#C95E45" stroke-width="1"/>
+                </g>
+
+                <!-- 내부 drain hole (공이 통과해 내려가는 입구) -->
+                <ellipse cx="0" cy="${GLOBE_R - 14}" rx="28" ry="8" fill="rgba(40,28,16,.55)"/>
+                <ellipse cx="0" cy="${GLOBE_R - 15}" rx="26" ry="6" fill="#0d0805"/>
+                <ellipse cx="0" cy="${GLOBE_R - 18}" rx="24" ry="1.6" fill="rgba(255,255,255,.4)"/>
+
+                <!-- spout (wood 깔때기) -->
+                <g>
+                    <path d="M -22 144 L 22 144 L 16 174 L -16 174 Z"
+                        fill="url(#lo-wood)" stroke="#9B6B3A" stroke-width="1"/>
+                    <path d="M -16 146 L 16 146 L 12 172 L -12 172 Z" fill="#1c130a"/>
+                    <line x1="-22" y1="144" x2="22" y2="144" stroke="rgba(255,255,255,.4)" stroke-width="1.2"/>
+                    <circle cx="-20" cy="156" r="2.2" fill="#FFE9A8" stroke="#9B6B3A" stroke-width="0.5"/>
+                    <circle cx="20" cy="156" r="2.2" fill="#FFE9A8" stroke="#9B6B3A" stroke-width="0.5"/>
+                    <rect x="-18" y="172" width="36" height="3" rx="1.5" fill="#9B6B3A"/>
+                </g>
+            </g>
+
+            <!-- 짧은 투명 슈트 (글로브 spout → tray) -->
+            <g transform="translate(${GLOBE_CX} ${GLOBE_CY})">
+                <rect x="-24" y="180" width="6" height="56" rx="2" fill="url(#lo-wood)" stroke="#9B6B3A" stroke-width="0.6"/>
+                <rect x="18" y="180" width="6" height="56" rx="2" fill="url(#lo-wood)" stroke="#9B6B3A" stroke-width="0.6"/>
+                <rect x="-18" y="180" width="36" height="56" rx="4"
+                    fill="rgba(255,255,255,0.42)" stroke="rgba(155,107,58,.42)" stroke-width="1"/>
+                <rect x="-14" y="184" width="3" height="48" rx="1.5" fill="rgba(255,255,255,.6)"/>
+                <rect x="12" y="186" width="1.4" height="44" rx="0.7" fill="rgba(255,255,255,.3)"/>
+            </g>
+
+            <!-- 펠트 트레이 -->
+            <g transform="translate(540 ${GLOBE_CY + 196})">
+                <ellipse cx="100" cy="78" rx="120" ry="9" fill="rgba(60,40,20,.28)"/>
+                <rect x="0" y="20" width="200" height="60" rx="14" fill="url(#lo-wood)" stroke="#9B6B3A" stroke-width="1.2"/>
+                <rect x="6" y="24" width="188" height="6" rx="3" fill="rgba(255,255,255,.32)"/>
+                <rect x="14" y="32" width="172" height="40" rx="10" fill="#FF8E72" stroke="#C95E45" stroke-width="1"/>
+                <rect x="22" y="40" width="156" height="24" rx="6" fill="none"
+                    stroke="rgba(255,255,255,.5)" stroke-width="0.8" stroke-dasharray="3 3"/>
+                <path d="M -6 38 Q -14 52 -6 66" stroke="#9B6B3A" stroke-width="3" fill="none" stroke-linecap="round"/>
+                <path d="M 206 38 Q 214 52 206 66" stroke="#9B6B3A" stroke-width="3" fill="none" stroke-linecap="round"/>
+                <!-- ※ PICK ME 라벨 제거 (영문 라벨 남발 회피) -->
+            </g>
+
+            <!-- 카운터/바닥 라인 -->
+            <rect x="100" y="694" width="1080" height="6" rx="3" fill="#D8A36B" opacity="0.4"/>
+            <rect x="100" y="696" width="1080" height="2" rx="1" fill="rgba(255,255,255,.55)"/>
+        `;
+
+        // ── 고양이 마스코트 SVG (별도 layer — 단순화 버전, PICKER 라벨 없음)
+        // 시안 대비: 수염 6→4, catchlight 4→2, 입 ω→U자, 페디스털 라벨 제거,
+        // 트로피 ★ 제거, blush/큰 눈/꼬리/raised paw 는 유지 (귀여움 핵심).
+        const catSvg = document.createElementNS(bgSvgNS, 'svg');
+        catSvg.setAttribute('class', 'lottery-cat-svg');
+        catSvg.setAttribute('viewBox', '0 0 1280 800');
+        catSvg.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+        catSvg.innerHTML = `
+            <defs>
+                <linearGradient id="lo-cat-wood" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#E0AC75"/>
+                    <stop offset="60%" stop-color="#C18548"/>
+                    <stop offset="100%" stop-color="#9B6B3A"/>
+                </linearGradient>
+                <radialGradient id="lo-cat-trophy" cx="0.35" cy="0.3" r="0.75">
+                    <stop offset="0%"  stop-color="#FFD3C2"/>
+                    <stop offset="48%" stop-color="#FF8E72"/>
+                    <stop offset="100%" stop-color="#C95E45"/>
+                </radialGradient>
+            </defs>
+            <g transform="translate(420 ${GLOBE_CY + 200})">
+                <!-- 페디스털 (PICKER 라벨 제거, 단순 wood block) -->
+                <g>
+                    <ellipse cx="0" cy="44" rx="56" ry="8" fill="rgba(60,40,20,.3)"/>
+                    <rect x="-52" y="4" width="104" height="40" rx="10" fill="url(#lo-cat-wood)" stroke="#9B6B3A" stroke-width="1.2"/>
+                    <rect x="-48" y="8" width="96" height="3" rx="1.5" fill="rgba(255,255,255,.4)"/>
+                    <circle cx="-40" cy="30" r="2.8" fill="#FFE9A8" stroke="#9B6B3A" stroke-width="0.6"/>
+                    <circle cx="40" cy="30" r="2.8" fill="#FFE9A8" stroke="#9B6B3A" stroke-width="0.6"/>
+                </g>
+
+                <!-- 고양이 본체 — y 0 기준 위로 올라감 -->
+                <g transform="translate(0 -52)">
+                    <!-- 꼬리 -->
+                    <path d="M -2 -6 Q -42 -28 -34 -76 Q -26 -102 -10 -98"
+                        stroke="#FFCC4F" stroke-width="20" fill="none" stroke-linecap="round"/>
+                    <circle cx="-10" cy="-98" r="4.5" fill="#FFE9A8" stroke="#C99320" stroke-width="1.2"/>
+
+                    <!-- 몸 -->
+                    <ellipse cx="0" cy="4" rx="50" ry="46" fill="#FFCC4F" stroke="#C99320" stroke-width="2.4"/>
+                    <ellipse cx="0" cy="18" rx="26" ry="26" fill="#FFE9A8" opacity="0.55"/>
+
+                    <!-- 좌측 발 (배 위에 얹은) -->
+                    <ellipse cx="-28" cy="14" rx="12" ry="20" fill="#FFCC4F" stroke="#C99320" stroke-width="2.4"/>
+                    <ellipse cx="-28" cy="30" rx="13" ry="9" fill="#FFCC4F" stroke="#C99320" stroke-width="2.4"/>
+
+                    <!-- 우측 발 (raised, 트로피 공) -->
+                    <g transform="translate(44 -22) rotate(-14)">
+                        <ellipse cx="0" cy="0" rx="12" ry="26" fill="#FFCC4F" stroke="#C99320" stroke-width="2.4"/>
+                        <ellipse cx="0" cy="-24" rx="14" ry="11" fill="#FFCC4F" stroke="#C99320" stroke-width="2.4"/>
+                    </g>
+
+                    <!-- 트로피 공 (★ 제거, 단순 sphere) -->
+                    <g transform="translate(54 -54)">
+                        <circle r="18" fill="url(#lo-cat-trophy)"/>
+                        <ellipse cx="-6" cy="-8" rx="4.5" ry="3" fill="rgba(255,255,255,.7)"/>
+                    </g>
+
+                    <!-- 머리 -->
+                    <g transform="translate(0 -54)">
+                        <!-- 귀 -->
+                        <path d="M -28 -8 L -36 -32 L -14 -16 Z"
+                            fill="#FFCC4F" stroke="#C99320" stroke-width="2.4" stroke-linejoin="round"/>
+                        <path d="M -24 -14 L -30 -28 L -16 -20 Z" fill="#FFB39B"/>
+                        <path d="M 28 -8 L 36 -32 L 14 -16 Z"
+                            fill="#FFCC4F" stroke="#C99320" stroke-width="2.4" stroke-linejoin="round"/>
+                        <path d="M 24 -14 L 30 -28 L 16 -20 Z" fill="#FFB39B"/>
+
+                        <!-- 얼굴 -->
+                        <ellipse cx="0" cy="0" rx="40" ry="32" fill="#FFCC4F" stroke="#C99320" stroke-width="2.4"/>
+
+                        <!-- 볼터치 -->
+                        <ellipse cx="-24" cy="9" rx="6.5" ry="3.5" fill="#FF8E72" opacity="0.65"/>
+                        <ellipse cx="24" cy="9" rx="6.5" ry="3.5" fill="#FF8E72" opacity="0.65"/>
+
+                        <!-- 눈 (점눈 + catchlight 1개씩) -->
+                        <ellipse cx="-12" cy="-2" rx="5.5" ry="7.5" fill="#2A2A3C"/>
+                        <ellipse cx="12" cy="-2" rx="5.5" ry="7.5" fill="#2A2A3C"/>
+                        <ellipse cx="-10" cy="-5" rx="2.2" ry="2.6" fill="#FFFFFF"/>
+                        <ellipse cx="14" cy="-5" rx="2.2" ry="2.6" fill="#FFFFFF"/>
+
+                        <!-- 코 -->
+                        <path d="M -3 8 L 3 8 L 0 12 Z" fill="#2A2A3C"/>
+
+                        <!-- 입 (단순 U자 1획) -->
+                        <path d="M -5 14 Q 0 18 5 14" stroke="#2A2A3C" stroke-width="2" fill="none" stroke-linecap="round"/>
+
+                        <!-- 수염 (양옆 2개씩, 단순) -->
+                        <line x1="-14" y1="8" x2="-38" y2="4" stroke="#C95E45" stroke-width="2" stroke-linecap="round"/>
+                        <line x1="-14" y1="14" x2="-38" y2="16" stroke="#C95E45" stroke-width="2" stroke-linecap="round"/>
+                        <line x1="14" y1="8" x2="38" y2="4" stroke="#C95E45" stroke-width="2" stroke-linecap="round"/>
+                        <line x1="14" y1="14" x2="38" y2="16" stroke="#C95E45" stroke-width="2" stroke-linecap="round"/>
+                    </g>
+                </g>
+            </g>
+        `;
+
+        stage.appendChild(boothSvg);
+        stage.appendChild(catSvg);
+
+        // ── 공 컨테이너 (글로브 중심 좌표에 0×0 앵커)
+        // 각 공의 transform 은 globe-center 기준 상대 좌표. SVG viewBox 와 같은
+        // 1280×800 좌표계의 절대 위치로 변환하기 위해 wrapper 가 viewport 비례 스케일.
+        const ballWrap = document.createElement('div');
+        ballWrap.className = 'lottery-ball-wrap';
+        // ballWrap 의 transform 은 CSS 가 viewport 기준으로 계산 — JS 는 공의 transform 만 갱신
+        stage.appendChild(ballWrap);
+
+        // ── 공 DOM
+        const balls = [];
+        const ballEls = [];
+        for (let i = 0; i < TOTAL_BALLS; i++) {
+            const palette = BALL_PALETTE[i % BALL_PALETTE.length];
+            const number = String(i + 1).padStart(2, '0');
+
+            // 초기 위치 — 원 안 무작위 (sqrt 분포로 균일)
+            const maxR = GLOBE_R - BALL_R - 4;
+            const r = Math.sqrt(Math.random()) * maxR;
+            const ang = Math.random() * Math.PI * 2;
+            balls.push({
+                x: r * Math.cos(ang),
+                y: r * Math.sin(ang),
+                vx: 0, vy: 0,
+                targetAngle: Math.random() * Math.PI * 2,
+                isWinner: false,
+                launchT: 0,
+                launchFrom: null,
+                palette,
+                number,
+            });
+
+            const el = document.createElement('div');
+            el.className = 'lottery-ball';
+            // sphere = radial gradient + 내부 disc + specular highlight
+            el.innerHTML = `
+                <div class="lottery-ball-sphere" style="background:radial-gradient(circle at 32% 26%, ${palette.l} 0%, ${palette.c} 48%, ${palette.d} 100%); box-shadow: inset 0 -8px 14px rgba(0,0,0,.28), inset 6px 8px 10px rgba(255,255,255,.55), 0 6px 12px rgba(60,40,20,.22);"></div>
+                <div class="lottery-ball-disc" style="color:${palette.d};">${number}</div>
+                <div class="lottery-ball-glint"></div>
+            `;
+            ballEls.push(el);
+            ballWrap.appendChild(el);
+        }
+
+        // separation pass — 초기 겹침 해소
+        for (let iter = 0; iter < 14; iter++) {
+            for (let i = 0; i < balls.length; i++) {
+                for (let j = i + 1; j < balls.length; j++) {
+                    const a = balls[i], b = balls[j];
+                    const dx = b.x - a.x, dy = b.y - a.y;
+                    const d = Math.hypot(dx, dy);
+                    const min = 2 * BALL_R + 4;
+                    if (d < min && d > 0.001) {
+                        const nx = dx / d, ny = dy / d;
+                        const push = (min - d) * 0.5;
+                        a.x -= nx * push; a.y -= ny * push;
+                        b.x += nx * push; b.y += ny * push;
+                    }
+                }
+            }
+        }
+
+        // ── 상단 HUD
+        let hudBarHtml = '';
+        for (let i = 0; i < barSegments; i++) hudBarHtml += '<span class="lottery-hud-bar-cell"></span>';
         const hud = document.createElement('div');
         hud.className = 'lottery-hud';
-        let hudBarHtml = '';
-        for (let i = 0; i < barSegments; i++) {
-            hudBarHtml += '<span class="lottery-hud-bar-cell"></span>';
-        }
+        // ※ "P" 마크 캡슐 제거 — 시안의 한글 "로또" 칩으로 교체
         hud.innerHTML = `
             <div class="lottery-hud-left">
-                <span class="lottery-hud-mark" aria-hidden="true">P</span>
+                <span class="lottery-hud-chip" aria-hidden="true">로또</span>
                 ${classLabel ? `<span class="lottery-hud-class">${classLabel}</span>` : ''}
-                <span class="lottery-hud-sub">학생 추첨</span>
+                <span class="lottery-hud-sub">로또 선발</span>
             </div>
             <div class="lottery-hud-right">
                 <span class="lottery-hud-label">ROUND</span>
@@ -341,29 +505,33 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
         `;
         stage.appendChild(hud);
 
-        // reveal 패널 (초기 hidden — 공이 선택된 뒤에만 show)
-        const revealPanel = document.createElement('div');
-        revealPanel.className = 'lottery-reveal-panel';
-        revealPanel.setAttribute('aria-hidden', 'true');
-        revealPanel.innerHTML = `
-            <div class="lottery-reveal-shelf"></div>
+        // ── reveal 패널 (종이 태그 + twine)
+        const revealWrap = document.createElement('div');
+        revealWrap.className = 'lottery-reveal-wrap';
+        revealWrap.setAttribute('aria-hidden', 'true');
+        revealWrap.innerHTML = `
+            <svg class="lottery-reveal-twine" viewBox="0 0 240 80" preserveAspectRatio="none">
+                <path d="M 2 10 Q 80 50 220 60" stroke="${AR.twine}" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-dasharray="3 2.4" opacity="0.9"/>
+            </svg>
             <div class="lottery-reveal-card">
+                <div class="lottery-reveal-grommet"></div>
+                <div class="lottery-reveal-grommet-hole"></div>
                 <div class="lottery-reveal-stripe"></div>
                 <div class="lottery-reveal-body">
-                    <div class="lottery-reveal-eyebrow">선발 · ROUND <span class="lottery-reveal-round">01</span></div>
+                    <div class="lottery-reveal-eyebrow">당첨 · ROUND <span class="lottery-reveal-round">01</span></div>
                     <div class="lottery-reveal-name"></div>
                     <div class="lottery-reveal-sub"></div>
                 </div>
             </div>
         `;
-        stage.appendChild(revealPanel);
+        stage.appendChild(revealWrap);
 
-        // 하단 rail
+        // ── 하단 rail
         const rail = document.createElement('div');
         rail.className = 'lottery-rail';
         rail.innerHTML = `
             <div class="lottery-rail-status">
-                <span class="lottery-rail-dot" data-phase="mixing"></span>
+                <span class="lottery-rail-dot" data-phase="mix"></span>
                 <span class="lottery-rail-status-text">추첨 중</span>
             </div>
             <div class="lottery-rail-chips">
@@ -376,22 +544,23 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
         `;
         stage.appendChild(rail);
 
-        // 선발 완료 배너
+        // ── 선발 완료 배너
         const finishBanner = document.createElement('div');
         finishBanner.className = 'lottery-finish-banner';
         finishBanner.textContent = '선발 완료';
         stage.appendChild(finishBanner);
 
+        // 마운트
         container.appendChild(stage);
         container.classList.add('lottery-active');
 
-        // ── DOM 참조 ────────────────────────────────────────
+        // ── DOM 참조
         const hudNumEl = hud.querySelector('.lottery-hud-num');
         const hudBarCells = hud.querySelectorAll('.lottery-hud-bar-cell');
-        const revealRoundEl = revealPanel.querySelector('.lottery-reveal-round');
-        const revealNameEl = revealPanel.querySelector('.lottery-reveal-name');
-        const revealSubEl = revealPanel.querySelector('.lottery-reveal-sub');
-        const revealStripeEl = revealPanel.querySelector('.lottery-reveal-stripe');
+        const revealRoundEl = revealWrap.querySelector('.lottery-reveal-round');
+        const revealNameEl = revealWrap.querySelector('.lottery-reveal-name');
+        const revealSubEl = revealWrap.querySelector('.lottery-reveal-sub');
+        const revealStripeEl = revealWrap.querySelector('.lottery-reveal-stripe');
         const railDot = rail.querySelector('.lottery-rail-dot');
         const railStatusText = rail.querySelector('.lottery-rail-status-text');
         const railChipsContainer = rail.querySelector('.lottery-rail-chips');
@@ -400,7 +569,6 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
         // 기존 .animation-message — 시각적으로 숨김 (CSS) 이지만
         // pickingMessage() 호출은 그대로 유지 (Math.min clamp 흐름 보존)
         const messageElement = document.querySelector('.animation-message');
-
         function updateMessage(message) {
             if (messageElement) messageElement.textContent = message;
         }
@@ -415,7 +583,6 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
             const display = Math.min(currentPickIndex + 1, total);
             hudNumEl.textContent = String(display).padStart(2, '0');
             const completed = Math.min(currentPickIndex, total);
-            // bar 가 12 이하면 1:1 매핑, 초과면 비율로 채움
             if (total <= 12) {
                 hudBarCells.forEach((cell, i) => {
                     cell.classList.toggle('filled', i < completed);
@@ -430,29 +597,16 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
         }
 
         const PHASE_TEXT = {
-            mixing: '추첨 중',
-            launching: '확인 중',
-            showing: '발표',
+            mix: '추첨 중',
+            eject: '배출 중',
+            settle: '안착',
+            reveal: '발표',
             gap: '대기 중',
             finishing: '선발 완료',
         };
-
-        function setRailPhase(phaseName, hex) {
+        function setRailPhase(phaseName) {
             railDot.setAttribute('data-phase', phaseName);
-            if (hex) {
-                railDot.style.setProperty('--phase-color', hex);
-            } else {
-                railDot.style.removeProperty('--phase-color');
-            }
             railStatusText.textContent = PHASE_TEXT[phaseName] || '';
-        }
-
-        function rgbStr(hex, dl) {
-            const r = (hex >> 16) & 0xff;
-            const g = (hex >> 8) & 0xff;
-            const b = hex & 0xff;
-            const cl = (v) => Math.max(0, Math.min(255, v + dl));
-            return `rgb(${cl(r)}, ${cl(g)}, ${cl(b)})`;
         }
 
         function addChip(student, palette) {
@@ -461,7 +615,7 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
             }
             const chip = document.createElement('span');
             chip.className = 'lottery-rail-chip';
-            const bg = `radial-gradient(circle at 35% 30%, ${rgbStr(palette.core, 90)} 0%, ${rgbStr(palette.core, 0)} 60%, ${rgbStr(palette.core, -60)} 100%)`;
+            const bg = `radial-gradient(circle at 35% 30%, ${palette.l} 0%, ${palette.c} 60%, ${palette.d} 100%)`;
             chip.innerHTML = `<span class="lottery-rail-chip-ball" style="background:${bg};"></span><span class="lottery-rail-chip-name"></span>`;
             chip.querySelector('.lottery-rail-chip-name').textContent = student.name;
             railChipsContainer.appendChild(chip);
@@ -469,158 +623,122 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
             if (chips.length > 6) chips[0].remove();
         }
 
-        // ── 카메라 / 좌표 헬퍼 ─────────────────────────────
-        function applyCameraSize() {
-            const isMobile = window.innerWidth <= 768;
-            camera.aspect = window.innerWidth / window.innerHeight;
-            if (isMobile) {
-                camera.position.set(0, 0.6, 11);
-                camera.fov = 52;
-            } else {
-                camera.position.set(0, 0.5, 9);
-                camera.fov = 45;
-            }
-            camera.lookAt(0, 0, 0);
-            camera.updateProjectionMatrix();
+        // ── 좌표 변환 — 글로브 중심 (640, 392) 의 viewport 픽셀 좌표를 구해
+        // ballWrap 의 transform 으로 사용. 매 frame 호출 (resize/스케일 대응).
+        function updateBallWrapTransform() {
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+            // preserveAspectRatio="xMidYMid slice" 와 동일한 매핑 계산
+            const scale = Math.max(vw / 1280, vh / 800);
+            const offsetX = (vw - 1280 * scale) / 2;
+            const offsetY = (vh - 800 * scale) / 2;
+            const cx = offsetX + GLOBE_CX * scale;
+            const cy = offsetY + GLOBE_CY * scale;
+            ballWrap.style.left = `${cx}px`;
+            ballWrap.style.top = `${cy}px`;
+            ballWrap.style.setProperty('--lo-scale', scale);
         }
 
-        const _projVec = new THREE.Vector3();
-        function worldToScreen(x, y, z) {
-            _projVec.set(x, y, z);
-            _projVec.project(camera);
-            return {
-                x: (_projVec.x * 0.5 + 0.5) * window.innerWidth,
-                y: (-_projVec.y * 0.5 + 0.5) * window.innerHeight,
-            };
-        }
-
-        // 당첨 공이 안착할 위치 — 튜브 좌상단 외부 (월드 좌표)
-        function getWinnerHome() {
-            const isMobile = window.innerWidth <= 768;
-            return {
-                x: isMobile ? -1.6 : -2.4,
-                y: TUBE_H / 2 + 0.4,
-                z: 0.6,
-            };
+        // ── 트레이볼 안착 좌표 (viewport 픽셀) — reveal tag 앵커
+        function getTrayBallScreenPos() {
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+            const scale = Math.max(vw / 1280, vh / 800);
+            const offsetX = (vw - 1280 * scale) / 2;
+            const offsetY = (vh - 800 * scale) / 2;
+            const wx = GLOBE_CX + CHUTE.end.x;
+            const wy = GLOBE_CY + CHUTE.end.y;
+            return { x: offsetX + wx * scale, y: offsetY + wy * scale, scale };
         }
 
         function positionRevealPanel() {
-            const home = getWinnerHome();
-            const screen = worldToScreen(home.x, home.y, home.z);
+            const tray = getTrayBallScreenPos();
+            // 데스크탑: 트레이 우측 상단, 모바일: 트레이 위 중앙
             const isMobile = window.innerWidth <= 768;
-            const offsetX = isMobile ? 60 : 110;
-            const panelHeightApprox = isMobile ? 130 : 158;
-            revealPanel.style.left = `${screen.x + offsetX}px`;
-            revealPanel.style.top = `${screen.y - panelHeightApprox / 2}px`;
+            if (isMobile) {
+                revealWrap.style.left = '50%';
+                revealWrap.style.top = `${tray.y - 220}px`;
+                revealWrap.style.transform = 'translateX(-50%)';
+            } else {
+                revealWrap.style.left = `${tray.x + 140 * tray.scale}px`;
+                revealWrap.style.top = `${tray.y - 80 * tray.scale}px`;
+                revealWrap.style.transform = 'none';
+            }
         }
 
-        // ── 물리 ────────────────────────────────────────────
+        // ── 물리
+        function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+        function easeInOutQuad(t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
+
+        function cubicBezier(p0, p1, p2, p3, t) {
+            const u = 1 - t;
+            return u * u * u * p0 + 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t * p3;
+        }
+        function chutePos(t) {
+            return {
+                x: cubicBezier(CHUTE.start.x, CHUTE.c1.x, CHUTE.c2.x, CHUTE.end.x, t),
+                y: cubicBezier(CHUTE.start.y, CHUTE.c1.y, CHUTE.c2.y, CHUTE.end.y, t),
+            };
+        }
+
         function stepPhysics(dt) {
-            const speed = (phase === 'mixing') ? MIX_SPEED
-                : (phase === 'gap') ? IDLE_SPEED
-                : SETTLE_SPEED;
+            const innerR = GLOBE_R - BALL_R;
+            const targetSpeed = phase === 'mix' ? MIX_SPEED : IDLE_SPEED;
+            const driftRate = phase === 'mix' ? DRIFT : DRIFT * 0.32;
 
             for (let i = 0; i < balls.length; i++) {
-                const ball = balls[i];
-                const ud = ball.userData;
-                if (ud.isWinner) continue;
+                const b = balls[i];
+                if (b.isWinner) continue;
 
-                // 목표 각도 천천히 드리프트 (Gaussian-ish noise)
-                ud.targetAngleH += ((Math.random() + Math.random() - 1)) * DRIFT_RATE * dt;
-                ud.targetAngleV += ((Math.random() + Math.random() - 1)) * DRIFT_RATE * 0.5 * dt;
-                if (ud.targetAngleV > 1.0) ud.targetAngleV = 1.0;
-                if (ud.targetAngleV < -1.0) ud.targetAngleV = -1.0;
+                b.targetAngle += ((Math.random() + Math.random() - 1)) * driftRate * dt;
+                const shimmer = 0.7 + 0.5 * (Math.sin(performance.now() / 700 + i * 1.7) + 1) / 2;
+                const sp = targetSpeed * shimmer;
+                const tvx = Math.cos(b.targetAngle) * sp;
+                const tvy = Math.sin(b.targetAngle) * sp;
+                b.vx += (tvx - b.vx) * CONVERGE * dt;
+                b.vy += (tvy - b.vy) * CONVERGE * dt;
+                b.vx *= DAMP; b.vy *= DAMP;
+                const speed = Math.hypot(b.vx, b.vy);
+                if (speed > MAX_V) { const k = MAX_V / speed; b.vx *= k; b.vy *= k; }
+                b.x += b.vx * dt; b.y += b.vy * dt;
 
-                const cosV = Math.cos(ud.targetAngleV);
-                const shimmer = 0.75 + 0.4 * (Math.sin(performance.now() / 700 + i * 1.7) + 1) / 2;
-                const sp = speed * shimmer;
-                const tvx = Math.cos(ud.targetAngleH) * cosV * sp;
-                const tvz = Math.sin(ud.targetAngleH) * cosV * sp;
-                const tvy = Math.sin(ud.targetAngleV) * sp;
-
-                ud.vx += (tvx - ud.vx) * CONVERGE * dt;
-                ud.vy += (tvy - ud.vy) * CONVERGE * dt;
-                ud.vz += (tvz - ud.vz) * CONVERGE * dt;
-
-                ud.vx *= DAMPING;
-                ud.vy *= DAMPING;
-                ud.vz *= DAMPING;
-
-                const sNow = Math.hypot(ud.vx, ud.vy, ud.vz);
-                if (sNow > MAX_SPEED) {
-                    const k = MAX_SPEED / sNow;
-                    ud.vx *= k; ud.vy *= k; ud.vz *= k;
-                }
-
-                ball.position.x += ud.vx * dt;
-                ball.position.y += ud.vy * dt;
-                ball.position.z += ud.vz * dt;
-
-                // 원통 벽 충돌
-                const rxz = Math.hypot(ball.position.x, ball.position.z);
-                const wallR = TUBE_R - BALL_R - 0.02;
-                if (rxz > wallR && rxz > 0.0001) {
-                    const nx = ball.position.x / rxz;
-                    const nz = ball.position.z / rxz;
-                    ball.position.x = nx * wallR;
-                    ball.position.z = nz * wallR;
-                    const vdotn = ud.vx * nx + ud.vz * nz;
-                    if (vdotn > 0) {
-                        ud.vx -= 2 * vdotn * nx * WALL_REST;
-                        ud.vz -= 2 * vdotn * nz * WALL_REST;
+                // 원형 wall bounce
+                const d = Math.hypot(b.x, b.y);
+                if (d > innerR) {
+                    const nx = b.x / d, ny = b.y / d;
+                    b.x = nx * innerR; b.y = ny * innerR;
+                    const vn = b.vx * nx + b.vy * ny;
+                    if (vn > 0) {
+                        b.vx -= (1 + WALL_REST) * vn * nx;
+                        b.vy -= (1 + WALL_REST) * vn * ny;
                     }
-                    // 안쪽으로 향하는 새 target — 벽 긁힘 방지
-                    ud.targetAngleH = Math.atan2(-nz, -nx) + (Math.random() - 0.5) * Math.PI * 0.5;
+                    b.targetAngle = Math.atan2(-ny, -nx) + (Math.random() - 0.5) * Math.PI * 0.6;
                 }
-
-                // 상/하 충돌
-                const yMin = -TUBE_H / 2 + BALL_R + 0.03;
-                const yMax = TUBE_H / 2 - BALL_R - 0.03;
-                if (ball.position.y < yMin) {
-                    ball.position.y = yMin;
-                    if (ud.vy < 0) ud.vy = -ud.vy * WALL_REST;
-                    ud.targetAngleV = Math.random() * 0.6 + 0.1;
-                }
-                if (ball.position.y > yMax) {
-                    ball.position.y = yMax;
-                    if (ud.vy > 0) ud.vy = -ud.vy * WALL_REST;
-                    ud.targetAngleV = -(Math.random() * 0.6 + 0.1);
-                }
-
-                // 굴러가는 느낌의 회전 — 비례 회전이라 구는 그대로 구
-                ball.rotation.x += ud.vz * dt * 1.8;
-                ball.rotation.z -= ud.vx * dt * 1.8;
-                ball.rotation.y += ud.vy * dt * 0.6;
             }
 
-            // 공-공 충돌 (2 iter)
+            // 공-공 충돌
             for (let iter = 0; iter < 2; iter++) {
                 for (let i = 0; i < balls.length; i++) {
                     const a = balls[i];
-                    if (a.userData.isWinner) continue;
+                    if (a.isWinner) continue;
                     for (let j = i + 1; j < balls.length; j++) {
                         const b = balls[j];
-                        if (b.userData.isWinner) continue;
-                        const dx = b.position.x - a.position.x;
-                        const dy = b.position.y - a.position.y;
-                        const dz = b.position.z - a.position.z;
-                        const d2 = dx * dx + dy * dy + dz * dz;
+                        if (b.isWinner) continue;
+                        const dx = b.x - a.x, dy = b.y - a.y;
+                        const d2 = dx * dx + dy * dy;
                         const min = 2 * BALL_R;
                         if (d2 < min * min && d2 > 0.0001) {
                             const dist = Math.sqrt(d2);
-                            const nx = dx / dist, ny = dy / dist, nz = dz / dist;
+                            const nx = dx / dist, ny = dy / dist;
                             const overlap = min - dist;
-                            const half = overlap * 0.5;
-                            a.position.x -= nx * half; a.position.y -= ny * half; a.position.z -= nz * half;
-                            b.position.x += nx * half; b.position.y += ny * half; b.position.z += nz * half;
-                            const dvx = b.userData.vx - a.userData.vx;
-                            const dvy = b.userData.vy - a.userData.vy;
-                            const dvz = b.userData.vz - a.userData.vz;
-                            const vn = dvx * nx + dvy * ny + dvz * nz;
+                            a.x -= nx * overlap * 0.5; a.y -= ny * overlap * 0.5;
+                            b.x += nx * overlap * 0.5; b.y += ny * overlap * 0.5;
+                            const dvx = b.vx - a.vx, dvy = b.vy - a.vy;
+                            const vn = dvx * nx + dvy * ny;
                             if (vn < 0) {
                                 const J = vn * BALL_REST;
-                                a.userData.vx += J * nx; a.userData.vy += J * ny; a.userData.vz += J * nz;
-                                b.userData.vx -= J * nx; b.userData.vy -= J * ny; b.userData.vz -= J * nz;
+                                a.vx += J * nx; a.vy += J * ny;
+                                b.vx -= J * nx; b.vy -= J * ny;
                             }
                         }
                     }
@@ -628,57 +746,96 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
             }
         }
 
-        // 당첨 공 선정 — 후보 중 무작위 1개, 시작 위치 캡처
-        function pickWinner() {
-            const candidates = balls.filter(b => !b.userData.isWinner);
-            if (candidates.length === 0) return null;
-            const winner = candidates[Math.floor(Math.random() * candidates.length)];
-            winner.userData.isWinner = true;
-            winner.userData.launchT = 0;
-            winner.userData.launchFrom = {
-                x: winner.position.x,
-                y: winner.position.y,
-                z: winner.position.z,
-            };
-            return winner;
-        }
-
-        // 당첨 공을 home 좌표로 ease-out 이동, 강조는 setScalar 만 사용
-        function stepWinnerLaunch(dt) {
-            if (!currentWinner) return false;
-            const ud = currentWinner.userData;
-            ud.launchT += dt;
-            const LAUNCH_DUR = 0.95;
-            const t = Math.min(ud.launchT / LAUNCH_DUR, 1);
-            const eased = 1 - Math.pow(1 - t, 3);
-            const home = getWinnerHome();
-            currentWinner.position.x = ud.launchFrom.x + (home.x - ud.launchFrom.x) * eased;
-            currentWinner.position.y = ud.launchFrom.y + (home.y - ud.launchFrom.y) * eased;
-            currentWinner.position.z = ud.launchFrom.z + (home.z - ud.launchFrom.z) * eased;
-            // 균등 스케일 1.0 → 1.5 — squash/stretch 금지, setScalar 만
-            currentWinner.scale.setScalar(1.0 + 0.5 * eased);
-            currentWinner.rotation.y += dt * 1.2;
-            // winner 강조용 emissive — material 은 ball 마다 독립 인스턴스라
-            // 다른 공으로 누출되지 않음. 첫 frame 에 색 한 번 설정 후
-            // intensity 는 0 → 0.18 로만 램프 (과한 자체 발광 방지).
-            if (ud.launchT - dt <= 0) {
-                currentWinner.material.emissive.setHex(ud.palette.core);
+        function applyBallTransforms() {
+            // 일반 공
+            for (let i = 0; i < balls.length; i++) {
+                if (balls[i].isWinner) continue;
+                const b = balls[i];
+                const el = ballEls[i];
+                if (!el) continue;
+                // rotation 은 속도 기반으로 약간 부여 (yaw 만)
+                const yaw = (b.x * 1.6 + b.y * 1.6) % 360;
+                el.style.transform = `translate(-50%, -50%) translate(${b.x.toFixed(2)}px, ${b.y.toFixed(2)}px) rotate(${yaw.toFixed(1)}deg)`;
+                el.style.zIndex = '';
             }
-            currentWinner.material.emissiveIntensity = 0.18 * eased;
-            return t >= 1;
         }
 
-        // ── 메인 루프 ───────────────────────────────────────
+        function pickWinner() {
+            const candidates = balls.map((b, i) => ({ b, i })).filter(x => !x.b.isWinner);
+            if (candidates.length === 0) return -1;
+            const pick = candidates[Math.floor(Math.random() * candidates.length)];
+            pick.b.isWinner = true;
+            pick.b.launchT = 0;
+            pick.b.launchFrom = { x: pick.b.x, y: pick.b.y };
+            return pick.i;
+        }
+
+        // winner ball 의 chute 위치 적용
+        function stepWinnerLaunch(now, durMs) {
+            const b = balls[winnerIdx];
+            const el = ballEls[winnerIdx];
+            if (!b || !el) return false;
+
+            const elapsed = (now - phaseStartT) / 1000;
+            const dur = durMs / 1000;
+            const k = Math.min(1, elapsed / dur);
+
+            if (phase === 'eject') {
+                const tt = easeInOutQuad(k);
+                // launch start (글로브 내부) → CHUTE 시작점은 spout 출구
+                // 부드러운 연결을 위해 첫 30%는 launchFrom → CHUTE.start, 나머지는 CHUTE 곡선
+                let px, py;
+                if (tt < 0.30) {
+                    const k2 = tt / 0.30;
+                    px = b.launchFrom.x + (CHUTE.start.x - b.launchFrom.x) * k2;
+                    py = b.launchFrom.y + (CHUTE.start.y - b.launchFrom.y) * k2;
+                } else {
+                    const k2 = (tt - 0.30) / 0.70;
+                    const cp = chutePos(k2);
+                    px = cp.x; py = cp.y;
+                }
+                // rotation 0 → 720° (즈ㅈ → 똑바로 안착, chat3 피드백 반영)
+                const rot = tt * 720;
+                const scale = 1 + 0.05 * Math.sin(k * Math.PI);
+                el.style.transform = `translate(-50%, -50%) translate(${px.toFixed(2)}px, ${py.toFixed(2)}px) rotate(${rot.toFixed(2)}deg) scale(${scale.toFixed(3)})`;
+                el.style.zIndex = '50';
+                return k >= 1;
+            } else if (phase === 'settle') {
+                const cp = chutePos(1);
+                const bounce = Math.sin(k * Math.PI) * 5 * (1 - k * 0.5);
+                const py = cp.y - bounce;
+                const scale = 1 + 0.06 * (1 - k);
+                el.style.transform = `translate(-50%, -50%) translate(${cp.x.toFixed(2)}px, ${py.toFixed(2)}px) rotate(720deg) scale(${scale.toFixed(3)})`;
+                el.style.zIndex = '50';
+                return k >= 1;
+            } else if (phase === 'reveal') {
+                const cp = chutePos(1);
+                const breathe = 1.04 + 0.02 * Math.sin(elapsed * 3.5);
+                el.style.transform = `translate(-50%, -50%) translate(${cp.x.toFixed(2)}px, ${cp.y.toFixed(2)}px) rotate(720deg) scale(${breathe.toFixed(3)})`;
+                el.style.zIndex = '50';
+            }
+            return false;
+        }
+
+        // ── 메인 RAF 루프
         function animate(now) {
-            // RAF 잔존으로 다른 테마 canvas 오염 방지
             if (isDisposed) return;
 
-            // 일시 중지 — 물리/페이즈 정지, RAF 만 유지 (기존 동작 보존)
+            // 일시 중지
             if (window.AppState && window.AppState.isPaused) {
+                if (pauseStartT === null) pauseStartT = now;
                 lastT = now;
                 rafId = requestAnimationFrame(animate);
                 return;
             }
+            // resume — paused duration 만큼 timestamp shift
+            if (pauseStartT !== null) {
+                const pausedDur = now - pauseStartT;
+                phaseStartT += pausedDur;
+                pauseStartT = null;
+                lastT = now;
+            }
+
             // 강제 중지
             if (window.AppState && window.AppState.shouldStop) {
                 cleanup();
@@ -690,60 +847,61 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
             lastT = now;
 
             stepPhysics(dt);
+            applyBallTransforms();
 
-            if (phase === 'mixing') {
-                if (now - mixStartT > currentMixDur) {
-                    currentWinner = pickWinner();
-                    if (currentWinner) {
-                        phase = 'launching';
+            // phase machine
+            if (phase === 'mix') {
+                if (now - phaseStartT > mixDur) {
+                    winnerIdx = pickWinner();
+                    if (winnerIdx >= 0) {
+                        phase = 'eject';
                         phaseStartT = now;
-                        setRailPhase('launching', currentWinner.userData.palette.hex);
+                        setRailPhase('eject');
                         updateMessage(pickingMessage());
                     }
                 }
-            } else if (phase === 'launching') {
-                positionRevealPanel();
-                const done = stepWinnerLaunch(dt);
+            } else if (phase === 'eject') {
+                const done = stepWinnerLaunch(now, T.eject);
                 if (done) {
+                    phase = 'settle';
+                    phaseStartT = now;
+                    setRailPhase('settle');
+                }
+            } else if (phase === 'settle') {
+                const done = stepWinnerLaunch(now, T.settle);
+                if (done) {
+                    // reveal 진입 — 종이 태그 + addPickedStudent 호출
                     const student = selectedStudents[currentPickIndex];
-                    const palette = currentWinner.userData.palette;
+                    const palette = balls[winnerIdx].palette;
 
-                    // reveal 패널 텍스트 채우고 show — 이름은 이 시점에 처음 노출
                     revealRoundEl.textContent = String(Math.min(currentPickIndex + 1, total)).padStart(2, '0');
                     revealNameEl.textContent = student.name;
-                    // 부제: AppState.purpose (역할) 가 있으면 사용, 없으면 비움
                     const role = (window.AppState && window.AppState.purpose) ? String(window.AppState.purpose).trim() : '';
                     revealSubEl.textContent = role || '';
-                    revealStripeEl.style.background = palette.hex;
-                    revealStripeEl.style.boxShadow = `0 0 22px ${palette.hex}aa`;
+                    revealStripeEl.style.background = palette.c;
 
                     positionRevealPanel();
-                    revealPanel.classList.add('show');
-                    revealPanel.setAttribute('aria-hidden', 'false');
+                    revealWrap.classList.add('show');
+                    revealWrap.setAttribute('aria-hidden', 'false');
 
-                    // 기존 흐름: addPickedStudent → playLotteryPick
                     if (addPickedStudent) addPickedStudent(student);
                     addChip(student, palette);
                     if (typeof soundManager !== 'undefined' && soundManager.playLotteryPick) {
                         soundManager.playLotteryPick();
                     }
 
-                    // 튜브 살짝 후퇴 — 당첨 공에 집중
-                    glassMat.opacity = 0.1;
-                    innerShadowMat.opacity = 0.07;
-
-                    setRailPhase('showing', palette.hex);
+                    setRailPhase('reveal');
                     updateMessage(`${student.name} 학생을 선발했습니다!`);
 
                     currentPickIndex++;
-                    phase = 'showing';
+                    phase = 'reveal';
                     phaseStartT = now;
                 }
-            } else if (phase === 'showing') {
-                const SHOW_DUR = 1700;
-                if (now - phaseStartT > SHOW_DUR) {
+            } else if (phase === 'reveal') {
+                stepWinnerLaunch(now, T.reveal); // breathe 효과만
+                if (now - phaseStartT > T.reveal) {
                     if (currentPickIndex >= selectedStudents.length) {
-                        // 마지막 reveal 종료 직후 배경음 정리 (app.js 후속 stop 충돌 방지)
+                        // 마지막 — finishing 진입
                         if (!bgMusicStopped && window.AppState && window.AppState.bgMusicInterval) {
                             if (typeof soundManager !== 'undefined' && soundManager.stopSound) {
                                 soundManager.stopSound(window.AppState.bgMusicInterval);
@@ -751,14 +909,9 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
                             window.AppState.bgMusicInterval = null;
                             bgMusicStopped = true;
                         }
-
-                        // reveal 패널 닫고 "선발 완료" 배너 1.1초 노출 후 resolve
-                        revealPanel.classList.remove('show');
-                        revealPanel.setAttribute('aria-hidden', 'true');
-                        glassMat.opacity = 0.18;
-                        innerShadowMat.opacity = 0.12;
-
-                        isComplete = true;     // 카운터 메시지가 '선발 완료' 덮는 것 방지
+                        revealWrap.classList.remove('show');
+                        revealWrap.setAttribute('aria-hidden', 'true');
+                        isComplete = true;
                         phase = 'finishing';
                         phaseStartT = now;
                         updateMessage('선발 완료!');
@@ -766,28 +919,24 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
                         finishBanner.classList.add('show');
                         finishBanner.setAttribute('aria-hidden', 'false');
 
-                        const COMPLETE_HOLD = 1100;
                         completeTimerId = setTimeout(() => {
                             completeTimerId = null;
                             if (isDisposed) return;
                             cleanup();
                             resolve();
-                        }, COMPLETE_HOLD);
+                        }, T.finishHold);
                     } else {
-                        // 다음 라운드 준비 — 당첨 공 제거, 튜브 회복, gap 진입
-                        revealPanel.classList.remove('show');
-                        revealPanel.setAttribute('aria-hidden', 'true');
-                        glassMat.opacity = 0.18;
-                        innerShadowMat.opacity = 0.12;
+                        // 다음 라운드 — winner 공 제거 후 mix 재개
+                        revealWrap.classList.remove('show');
+                        revealWrap.setAttribute('aria-hidden', 'true');
 
-                        if (currentWinner) {
-                            tubeGroup.remove(currentWinner);
-                            if (currentWinner.material) currentWinner.material.dispose();
-                            const idx = balls.indexOf(currentWinner);
-                            if (idx >= 0) balls.splice(idx, 1);
-                            currentWinner.scale.setScalar(1.0);
-                            currentWinner = null;
+                        const winnerEl = ballEls[winnerIdx];
+                        if (winnerEl && winnerEl.parentElement) {
+                            winnerEl.parentElement.removeChild(winnerEl);
                         }
+                        balls.splice(winnerIdx, 1);
+                        ballEls.splice(winnerIdx, 1);
+                        winnerIdx = -1;
 
                         phase = 'gap';
                         phaseStartT = now;
@@ -796,34 +945,30 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
                     }
                 }
             } else if (phase === 'gap') {
-                const GAP_DUR = 500;
-                if (now - phaseStartT > GAP_DUR) {
-                    phase = 'mixing';
-                    mixStartT = now;
-                    currentMixDur = MIX_DURATION_NEXT;
-                    setRailPhase('mixing');
+                if (now - phaseStartT > T.gap) {
+                    phase = 'mix';
+                    phaseStartT = now;
+                    mixDur = T.mix;
+                    setRailPhase('mix');
                 }
             } else if (phase === 'finishing') {
-                // 타이머가 cleanup/resolve 처리 — 여기서는 계속 렌더만
+                // 타이머가 cleanup/resolve 처리
             }
 
             if (!isComplete) updateHud();
 
-            renderer.render(scene, camera);
             rafId = requestAnimationFrame(animate);
         }
 
-        // ── 리사이즈 ────────────────────────────────────────
+        // ── 리사이즈
         function onWindowResize() {
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            applyCameraSize();
+            updateBallWrapTransform();
             positionRevealPanel();
         }
         window.addEventListener('resize', onWindowResize);
 
-        // ── 정리 ────────────────────────────────────────────
+        // ── 정리
         function cleanup() {
-            // RAF 가드 — cleanup 후 큐에 남은 frame이 발동해도 즉시 return
             isDisposed = true;
             if (rafId !== null) {
                 cancelAnimationFrame(rafId);
@@ -835,38 +980,25 @@ async function runLotteryAnimation(canvas, selectedStudents, addPickedStudent) {
             }
             window.removeEventListener('resize', onWindowResize);
 
-            // 동적 오버레이 제거 + 컨테이너 상태 복원
             container.classList.remove('lottery-active');
             if (stage && stage.parentElement) {
                 stage.parentElement.removeChild(stage);
             }
-
-            // Three.js 리소스 정리
-            scene.traverse((object) => {
-                if (object.geometry) object.geometry.dispose();
-                if (object.material) {
-                    if (Array.isArray(object.material)) {
-                        object.material.forEach(material => material.dispose());
-                    } else {
-                        object.material.dispose();
-                    }
-                }
-            });
-            renderer.dispose();
+            // threeCanvas 복원
+            if (canvas && canvas.style) canvas.style.display = '';
         }
 
-        // ── 시작 ────────────────────────────────────────────
-        applyCameraSize();
+        // ── 시작 — 첫 프레임 render 후 메시지/HUD 업데이트
+        updateBallWrapTransform();
         positionRevealPanel();
+        applyBallTransforms();
 
-        // 첫 프레임을 먼저 그린 뒤 메시지/HUD 를 표시 — 검은 화면에
-        // 글자만 먼저 뜨는 문제 방지
-        renderer.render(scene, camera);
         rafId = requestAnimationFrame(() => {
             if (isDisposed) return;
             updateMessage('공을 섞는 중...');
             updateHud();
-            setRailPhase('mixing');
+            setRailPhase('mix');
+            phaseStartT = performance.now();
             lastT = performance.now();
             animate(performance.now());
         });

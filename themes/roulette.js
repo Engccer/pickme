@@ -1,62 +1,101 @@
-// 룰렛 테마 — Broadcast Studio v2 (refined v3)
+// 룰렛 테마 — Bright Kitsch Arcade
 //
-// 디자인 방향: deep navy 무대 위 brass 트림의 큰 룰렛 휠이 주인공.
-// SVG 휠 + HTML 오버레이 (Three.js 미사용). animationContainer 전체
-// viewport 를 사용하며 작은 16:9 프레임으로 가두지 않는다.
+// 디자인 방향: 파스텔 mint 무대 위 큰 prize wheel + 코랄 화살 포인터.
+// 휠은 24-petal scallop rim + warm yellow outer ring + 12 pastel
+// segment + cream divider + sun dot. 허브는 단순 sun disc 로 문자/로고
+// 없음. 배경에 bunting 깃발 + starburst rays. SVG + HTML 오버레이.
+//
+// 절대 포함하지 않는 것 (사용자 명시):
+//  - HUD 좌측의 P 마크 / "P" 글자
+//  - 휠 중심부의 P 문자 / 다른 로고 문자
+//  - 화면에 떠 있는 로또 공처럼 보이는 원형 장식 (mote/광원 점)
+//  - 휠 segment 위 학생 이름 노출 — reveal 전 결과 노출 방지
 //
 // 안전 로직 (절대 깨면 안 됨):
 //  - runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 시그니처
 //  - isDisposed / rafId / cancelAnimationFrame cleanup 패턴
-//  - isComplete 가드 (완료 후 카운터 메시지가 '선발 완료' 덮는 것 방지)
-//  - pickingMessage() Math.min clamp — 3/2 카운터 버그 재발 방지
-//  - 첫 frame 후 메시지 업데이트 순서
+//  - isComplete 가드
+//  - pickingMessage() Math.min clamp
+//  - 첫 프레임 render 후 메시지 업데이트 순서
 //  - window.AppState.isPaused / shouldStop 처리
-//  - addPickedStudent 호출 흐름 유지 (reveal 직후 1회)
-//  - 마지막 reveal 후 bgMusicInterval 을 즉시 stop + null — app.js 후속 stop 충돌 방지
-//  - resize 리스너 cleanup, 동적 roulette DOM cleanup
-//  - 다른 테마와 RAF 격리 (closure 내부 isDisposed/rafId 가드)
-//  - 휠 중심부에 P 글자 없음 (HUD 의 작은 브랜드 마크만 허용)
-//  - pause/resume 시 trajectory.startT 와 phaseStartT 를 paused duration 만큼
-//    shift 하여 resume 직후 즉시 완료되지 않게 보정
+//  - addPickedStudent 호출 흐름 유지 (reveal 진입 직후 1회)
+//  - 마지막 reveal 후 bgMusicInterval 즉시 stop + null
+//  - 다른 테마와 RAF 격리 (closure 내 isDisposed/rafId 가드)
+//  - pause/resume 시 trajectory.startT 와 phaseStartT 를 paused duration 만큼 shift
+//  - 선발 알고리즘 변경 금지 — selectedStudents 결과 그대로 사용
 
 async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) {
     return new Promise((resolve) => {
-        // ── 디자인 토큰 (refined v3 — brass 채도/대비 향상)
-        const BRASS_HI = '#F2D384';
-        const BRASS_MID = '#D9B26F';
-        const BRASS_LO = '#8A6E3B';
-        const BRASS_SHADOW = '#33260F';
-        const SEG_EVEN = '#0E1525';
-        const SEG_ODD = '#1D2645';
+        // ── 디자인 토큰 (Bright Kitsch Arcade)
+        const AR = {
+            bgTop:    '#EAF8F2',
+            bgMid:    '#CDEFE3',
+            bgLo:     '#A6E0D2',
+            cream:    '#FFF5E0',
+            paper:    '#FBF1D8',
+            paperEdge:'#E9D4A1',
+            ink:      '#2A2A3C',
+            inkSoft:  'rgba(42,42,60,.62)',
+            inkFaint: 'rgba(42,42,60,.32)',
+            coral:    '#FF8E72',
+            coralLo:  '#E14B4B',
+            mint:     '#5FD0BD',
+            mintLo:   '#2E8C95',
+            lemon:    '#FFCC4F',
+            sun:      '#F5C849',
+            sky:      '#9FCEE9',
+            lavender: '#C9B5E8',
+            peach:    '#FFB39B',
+            rose:     '#FF9BAA',
+            wood:     '#D8A36B',
+            woodLo:   '#9B6B3A',
+            twine:    '#A47A44',
+        };
 
-        // ── 휠 기하학 (디자인 SVG 단위, 휠 wrap pixel 크기로 비례 스케일됨)
-        const WHEEL_R = 240;
-        const HUB_R = 78;
-        const NUM_R = 200;
+        // 12 segment 파스텔 컬러 — 인접 segment 가 항상 대비되도록 배치
+        // (cream 이 들어가도 stroke 가 있어서 가독성 유지)
+        const SEG_COLORS = [
+            { c: '#FF8E72', d: '#C95E45' },                 // coral
+            { c: '#FFF5E0', d: '#C99320', isLight: true },  // cream
+            { c: '#5FD0BD', d: '#2E8C95' },                 // mint
+            { c: '#FFCC4F', d: '#C99320' },                 // lemon
+            { c: '#9FCEE9', d: '#3578A8' },                 // sky
+            { c: '#C9B5E8', d: '#7B66A8' },                 // lavender
+            { c: '#FF8E72', d: '#C95E45' },
+            { c: '#FFF5E0', d: '#C99320', isLight: true },
+            { c: '#5FD0BD', d: '#2E8C95' },
+            { c: '#FFCC4F', d: '#C99320' },
+            { c: '#9FCEE9', d: '#3578A8' },
+            { c: '#C9B5E8', d: '#7B66A8' },
+        ];
 
-        // ── 세그먼트 — 학생 수에 비례하되 8~30 클램프, 익명 숫자만 표시
-        const total = selectedStudents.length;
-        const SEGMENTS = Math.max(8, Math.min(total, 30));
+        // ── 휠 기하학 (SVG 단위, viewport 비례 스케일됨)
+        const WHEEL_R = 248;
+        const HUB_R = 62;
+        const NUM_R = 196;
+        // SEGMENTS — 학생 수와 무관하게 12 고정 (시안 일관성).
+        // winnerIdx 는 매 라운드 무작위, currentPickIndex 가 실제 결과 인덱스.
+        const SEGMENTS = 12;
         const SEG_DEG = 360 / SEGMENTS;
 
         // ── timing (ms)
         const T = {
-            idle: 250,       // 첫 프레임 직후 짧은 warm-up
-            spin: 1800,      // 등속 회전
-            decel: 3300,     // ease-out 감속하며 winner segment 에 안착
-            stop: 600,       // winner 강조 (포인터 확인)
-            reveal: 1800,    // reveal 패널 노출 (anim 0.55s + 읽기 시간)
-            gap: 450,        // 다음 라운드 진입 전 짧은 휴식
-            finishing: 1100, // 마지막 라운드 후 '선발 완료' 배너 노출 시간
+            idle: 220,
+            spin: 1800,
+            decel: 3200,
+            stop: 600,
+            reveal: 1700,
+            gap: 450,
+            finishHold: 1100,
         };
-        const SPIN_SPEED = 540; // deg/sec
+        const SPIN_SPEED = 520; // deg/sec
 
         // ── 상태
         let currentPickIndex = 0;
         let phase = 'idle';
         let phaseStartT = performance.now();
         let angle = 0;
-        let trajectory = null;     // { kind, startA, endA|velocity, startT, duration }
+        let trajectory = null;
         let winnerIdx = 0;
         let isComplete = false;
         let isDisposed = false;
@@ -65,7 +104,7 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
         let lastT = performance.now();
         let lastAngle = 0;
         let bgMusicStopped = false;
-        const usedSegments = new Set();  // 시각 다양성 — 가능한 한 매 라운드 다른 세그먼트
+        const usedSegments = new Set();
 
         // ── DOM 셋업
         const container = canvas.parentElement; // #animationContainer
@@ -73,25 +112,7 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
         stage.className = 'roulette-stage';
         stage.setAttribute('aria-hidden', 'true');
 
-        // 분위기 (vignette + key cone + 보조 cone + floor pool + 모트 14개)
-        const atmosphere = document.createElement('div');
-        atmosphere.className = 'roulette-atmosphere';
-        let atmosphereHtml = '<div class="roulette-vignette"></div>'
-            + '<div class="roulette-key-cone"></div>'
-            + '<div class="roulette-inner-cone"></div>'
-            + '<div class="roulette-floor-pool"></div>';
-        for (let i = 0; i < 14; i++) {
-            const x = (i * 41) % 100;
-            const y = 32 + ((i * 23) % 56);
-            const dur = 9 + (i % 5) * 2;
-            const sz = 1.5 + (i % 3);
-            const mx = ((i % 3) - 1) * 14;
-            atmosphereHtml += `<span class="roulette-mote" style="left:${x}%;top:${y}%;width:${sz}px;height:${sz}px;animation-duration:${dur}s;animation-delay:${(i * 0.55).toFixed(1)}s;--mx:${mx}px;"></span>`;
-        }
-        atmosphere.innerHTML = atmosphereHtml;
-        stage.appendChild(atmosphere);
-
-        // 상단 HUD — 학급명 + ROUND 카운터 + 12칸 진행 바
+        // ── 학급 라벨
         const first = selectedStudents[0] || {};
         const sameGrade = selectedStudents.every(s => s && s.grade === first.grade);
         const sameClass = selectedStudents.every(s => s && s.class === first.class);
@@ -101,16 +122,80 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
         } else if (first.grade && sameGrade) {
             classLabel = `${first.grade}학년`;
         }
+        const total = selectedStudents.length;
         const barSegments = Math.max(1, Math.min(total, 12));
+
+        // ── 배경 (mint 그라데이션 + dots + warm spot + bunting + starburst)
+        const svgNS = 'http://www.w3.org/2000/svg';
+        const backdrop = document.createElementNS(svgNS, 'svg');
+        backdrop.setAttribute('class', 'roulette-backdrop-svg');
+        backdrop.setAttribute('viewBox', '0 0 1280 800');
+        backdrop.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+
+        // bunting 색 순환
+        const buntColors = [AR.coral, AR.lemon, AR.mint, AR.sky, AR.lavender, AR.peach];
+
+        backdrop.innerHTML = `
+            <defs>
+                <linearGradient id="ro-bg" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%"  stop-color="${AR.bgTop}"/>
+                    <stop offset="45%" stop-color="${AR.bgMid}"/>
+                    <stop offset="100%" stop-color="${AR.bgLo}"/>
+                </linearGradient>
+                <pattern id="ro-dots" x="0" y="0" width="32" height="32" patternUnits="userSpaceOnUse">
+                    <circle cx="16" cy="16" r="1.6" fill="rgba(46,140,149,0.22)"/>
+                </pattern>
+                <radialGradient id="ro-warm" cx="0.5" cy="0.4" r="0.6">
+                    <stop offset="0%"  stop-color="rgba(255,233,168,.55)"/>
+                    <stop offset="35%" stop-color="rgba(255,233,168,.18)"/>
+                    <stop offset="100%" stop-color="rgba(255,233,168,0)"/>
+                </radialGradient>
+            </defs>
+            <rect width="1280" height="800" fill="url(#ro-bg)"/>
+            <rect width="1280" height="800" fill="url(#ro-dots)" opacity="0.55"/>
+
+            <!-- starburst rays (subtle, 휠 뒤) -->
+            <g opacity="0.28" transform="translate(640 432)">
+                ${Array.from({ length: 24 }).map((_, i) => {
+                    const a = (i * 15) * Math.PI / 180;
+                    const x2 = 700 * Math.cos(a);
+                    const y2 = 700 * Math.sin(a);
+                    return `<path d="M 0 0 L ${(x2 * 0.45).toFixed(2)} ${(y2 * 0.45).toFixed(2)} L ${x2.toFixed(2)} ${y2.toFixed(2)} L ${(x2 * 0.45 + 4).toFixed(2)} ${(y2 * 0.45 + 4).toFixed(2)} Z" fill="#FFE9A8" opacity="${i % 2 ? 0.5 : 0.3}"/>`;
+                }).join('')}
+            </g>
+
+            <!-- warm spotlight -->
+            <ellipse cx="640" cy="400" rx="440" ry="320" fill="url(#ro-warm)"/>
+
+            <!-- bunting (16 깃발, sway 없음 — 정적) -->
+            <g>
+                <path d="M 40 100 Q 320 136 640 124 Q 960 112 1240 96" stroke="#9B6B3A" stroke-width="1.6" fill="none" opacity="0.6"/>
+                ${Array.from({ length: 16 }).map((_, i) => {
+                    const c = buntColors[i % buntColors.length];
+                    const x = 80 + i * 76;
+                    const tt = (x - 40) / 1200;
+                    const y = 100 + Math.sin(tt * Math.PI) * 28;
+                    return `<g transform="translate(${x} ${y})">
+                        <path d="M 0 0 L 22 0 L 11 36 Z" fill="${c}" stroke="rgba(155,107,58,.32)" stroke-width="0.8"/>
+                        <path d="M 2 2 L 9 2 L 6 14 Z" fill="rgba(255,255,255,.32)"/>
+                    </g>`;
+                }).join('')}
+            </g>
+
+            <!-- 카운터 라인 -->
+            <rect x="80" y="694" width="1120" height="6" rx="3" fill="#D8A36B" opacity="0.35"/>
+            <rect x="80" y="696" width="1120" height="2" rx="1" fill="rgba(255,255,255,.55)"/>
+        `;
+        stage.appendChild(backdrop);
+
+        // ── HUD — "P" 마크 없음, 한글 "룰렛" 칩만
         let hudBarHtml = '';
-        for (let i = 0; i < barSegments; i++) {
-            hudBarHtml += '<span class="roulette-hud-bar-cell"></span>';
-        }
+        for (let i = 0; i < barSegments; i++) hudBarHtml += '<span class="roulette-hud-bar-cell"></span>';
         const hud = document.createElement('div');
         hud.className = 'roulette-hud';
         hud.innerHTML = `
             <div class="roulette-hud-left">
-                <span class="roulette-hud-mark" aria-hidden="true">P</span>
+                <span class="roulette-hud-chip" aria-hidden="true">룰렛</span>
                 ${classLabel ? `<span class="roulette-hud-class">${classLabel}</span>` : ''}
                 <span class="roulette-hud-sub">룰렛 선발</span>
             </div>
@@ -126,11 +211,8 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
         `;
         stage.appendChild(hud);
 
-        // ── 휠 SVG (segments + dividers + ticks + numbers + 추상 brass 허브 + 포인터)
-        //
-        // SVG 좌표계: viewBox -280 -280 560 560 (center = 0,0). 휠 wrap pixel
-        // 크기에 비례 스케일된다. 휠 중심부에는 P 글자 없음 — polished brass
-        // dome + N/E/S/W 컴퍼스 틱 + 중앙 signet dot 만.
+        // ── 휠 SVG (segments + dividers + sun dots + 익명 번호 + sun disc 허브 + 포인터)
+        // ※ 학생 이름은 휠에 절대 표시하지 않음 — 익명 번호 01..N 만 표시.
 
         function segPath(rOuter, rInner, startDeg, endDeg) {
             const a1 = (startDeg - 90) * Math.PI / 180;
@@ -148,172 +230,204 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
             return `M ${i1x} ${i1y} L ${o1x} ${o1y} A ${rOuter} ${rOuter} 0 0 1 ${o2x} ${o2y} L ${i2x} ${i2y} A ${rInner} ${rInner} 0 0 0 ${i1x} ${i1y} Z`;
         }
 
-        // segments
-        let segmentsHtml = '';
-        for (let i = 0; i < SEGMENTS; i++) {
-            const baseFill = i % 2 === 0 ? SEG_EVEN : SEG_ODD;
-            segmentsHtml += `<path class="ro-seg" data-idx="${i}" d="${segPath(WHEEL_R - 4, HUB_R + 2, i * SEG_DEG, (i + 1) * SEG_DEG)}" fill="${baseFill}"></path>`;
+        // 24-petal scallop rim
+        let scallopHtml = '';
+        for (let i = 0; i < 24; i++) {
+            const a = (i * 15) * Math.PI / 180;
+            const cx = ((WHEEL_R + 14) * Math.cos(a - Math.PI / 2)).toFixed(2);
+            const cy = ((WHEEL_R + 14) * Math.sin(a - Math.PI / 2)).toFixed(2);
+            scallopHtml += `<circle cx="${cx}" cy="${cy}" r="13" fill="${AR.cream}" stroke="#E9D4A1" stroke-width="1"/>`;
         }
 
-        // winner 강조용 brass 틴트 (초기 d 빈 값, 강조 시 setAttribute)
-        const winnerTintHtml = `<path class="ro-winner-tint" d="" fill="${BRASS_MID}" opacity="0"></path>`;
+        // segments + dividers + sun dots + 번호 (정적 — winner highlight 는 별도 layer 로 처리)
+        let segmentsHtml = '';
+        for (let i = 0; i < SEGMENTS; i++) {
+            const startA = i * SEG_DEG;
+            const endA = (i + 1) * SEG_DEG;
+            const col = SEG_COLORS[i % SEG_COLORS.length];
+            segmentsHtml += `<path class="ro-seg" data-idx="${i}" d="${segPath(WHEEL_R - 6, HUB_R + 4, startA, endA)}" fill="${col.c}" stroke="#FFFAEC" stroke-width="2.2"/>`;
+            if (col.isLight) {
+                segmentsHtml += `<path d="${segPath(WHEEL_R - 6, HUB_R + 4, startA, endA)}" fill="none" stroke="rgba(155,107,58,.16)" stroke-width="1"/>`;
+            }
+        }
+        // winner 강조 overlay (초기 비표시)
+        const winnerTintHtml = `<path class="ro-winner-tint" d="" fill="${AR.lemon}" opacity="0"/>`;
 
-        // 분할선
         let dividersHtml = '';
         for (let i = 0; i < SEGMENTS; i++) {
             const a = (i * SEG_DEG - 90) * Math.PI / 180;
-            const x1 = ((HUB_R + 2) * Math.cos(a)).toFixed(2);
-            const y1 = ((HUB_R + 2) * Math.sin(a)).toFixed(2);
-            const x2 = ((WHEEL_R - 4) * Math.cos(a)).toFixed(2);
-            const y2 = ((WHEEL_R - 4) * Math.sin(a)).toFixed(2);
-            dividersHtml += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${BRASS_LO}" stroke-width="0.9" opacity="0.72"/>`;
+            const x1 = ((HUB_R + 4) * Math.cos(a)).toFixed(2);
+            const y1 = ((HUB_R + 4) * Math.sin(a)).toFixed(2);
+            const x2 = ((WHEEL_R - 6) * Math.cos(a)).toFixed(2);
+            const y2 = ((WHEEL_R - 6) * Math.sin(a)).toFixed(2);
+            dividersHtml += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#FFFAEC" stroke-width="2.2"/>`;
         }
 
-        // 외곽 tick
-        let ticksHtml = '';
+        let sunDotsHtml = '';
         for (let i = 0; i < SEGMENTS; i++) {
-            const a = ((i + 0.5) * SEG_DEG - 90) * Math.PI / 180;
-            const x1 = ((WHEEL_R - 10) * Math.cos(a)).toFixed(2);
-            const y1 = ((WHEEL_R - 10) * Math.sin(a)).toFixed(2);
-            const x2 = ((WHEEL_R - 3) * Math.cos(a)).toFixed(2);
-            const y2 = ((WHEEL_R - 3) * Math.sin(a)).toFixed(2);
-            ticksHtml += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${BRASS_HI}" stroke-width="0.8" opacity="0.55"/>`;
+            const a = (i * SEG_DEG - 90) * Math.PI / 180;
+            const x = ((WHEEL_R - 10) * Math.cos(a)).toFixed(2);
+            const y = ((WHEEL_R - 10) * Math.sin(a)).toFixed(2);
+            sunDotsHtml += `<circle cx="${x}" cy="${y}" r="3" fill="${AR.sun}" stroke="#9B6B3A" stroke-width="0.6"/>`;
         }
 
-        // 익명 숫자 01..N — 학생 이름은 절대 휠에 노출하지 않음
+        // 익명 번호 01..N (학생 이름 없음)
         let numbersHtml = '';
         for (let i = 0; i < SEGMENTS; i++) {
             const centerA = (i + 0.5) * SEG_DEG;
             const a = (centerA - 90) * Math.PI / 180;
             const x = (NUM_R * Math.cos(a)).toFixed(2);
             const y = (NUM_R * Math.sin(a)).toFixed(2);
-            numbersHtml += `<text class="ro-num" data-idx="${i}" x="${x}" y="${y}" text-anchor="middle" dy="0.34em" font-family="Manrope, system-ui, sans-serif" font-size="14" font-weight="600" fill="${BRASS_HI}" opacity="0.92" transform="rotate(${centerA.toFixed(2)} ${x} ${y})" style="letter-spacing: 0.5px">${String(i + 1).padStart(2, '0')}</text>`;
+            numbersHtml += `<g transform="translate(${x} ${y}) rotate(${centerA.toFixed(2)})">
+                <circle r="14" fill="#FFFAEC" stroke="#E9D4A1" stroke-width="1.2"/>
+                <text class="ro-num" data-idx="${i}" text-anchor="middle" dy="0.36em"
+                    font-family="Manrope, system-ui, sans-serif"
+                    font-size="13" font-weight="800" fill="${AR.coralLo}"
+                    style="letter-spacing: 0.4px">${String(i + 1).padStart(2, '0')}</text>
+            </g>`;
         }
 
-        // 추상 brass 허브 — P 글자 없음
-        const hubCompassTicks = [0, 90, 180, 270].map(deg => {
-            const a = (deg - 90) * Math.PI / 180;
-            const x1 = ((HUB_R - 36) * Math.cos(a)).toFixed(2);
-            const y1 = ((HUB_R - 36) * Math.sin(a)).toFixed(2);
-            const x2 = ((HUB_R - 30) * Math.cos(a)).toFixed(2);
-            const y2 = ((HUB_R - 30) * Math.sin(a)).toFixed(2);
-            return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${BRASS_SHADOW}" stroke-width="0.8" opacity="0.55"/>`;
-        }).join('');
-
-        const domeR = HUB_R - 32;
+        // 허브 — sun disc, 문자 없음
         const hubHtml = `
-            <circle r="${HUB_R + 2}" fill="none" stroke="${BRASS_LO}" stroke-width="2" opacity="0.85"/>
-            <circle r="${HUB_R}" fill="none" stroke="${BRASS_HI}" stroke-width="0.6" opacity="0.55"/>
-            <circle r="${HUB_R - 2}" fill="url(#ro-hub-base)"/>
-            <circle r="${HUB_R - 14}" fill="none" stroke="${BRASS_MID}" stroke-width="1" opacity="0.7"/>
-            <circle r="${domeR}" fill="url(#ro-hub-dome)" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,.5));"/>
-            ${hubCompassTicks}
-            <circle r="${HUB_R - 36}" fill="none" stroke="${BRASS_SHADOW}" stroke-width="0.6" opacity="0.4"/>
-            <ellipse cx="${(-domeR * 0.35).toFixed(2)}" cy="${(-domeR * 0.45).toFixed(2)}" rx="${(domeR * 0.42).toFixed(2)}" ry="${(domeR * 0.22).toFixed(2)}" fill="rgba(255,250,235,.65)" filter="blur(1.2)"/>
-            <ellipse cx="${(-domeR * 0.45).toFixed(2)}" cy="${(-domeR * 0.55).toFixed(2)}" rx="${(domeR * 0.18).toFixed(2)}" ry="${(domeR * 0.08).toFixed(2)}" fill="rgba(255,255,255,.85)" filter="blur(0.5)"/>
-            <circle r="5" fill="${BRASS_SHADOW}"/>
-            <circle r="3" fill="url(#ro-hub-dome)"/>
-            <circle r="1.2" cy="-1" fill="rgba(255,250,235,.85)"/>
+            <circle r="${HUB_R + 2}" fill="#9B6B3A" opacity="0.18"/>
+            <circle r="${HUB_R}" fill="url(#ro-hub-sun)" stroke="#C99320" stroke-width="1.4"/>
+            <circle r="${HUB_R - 12}" fill="none" stroke="#FFFFFF" stroke-width="2.4" opacity="0.7"/>
+            <circle r="${HUB_R - 12}" fill="none" stroke="#E9D4A1" stroke-width="1" opacity="0.6"/>
+            ${Array.from({ length: 12 }).map((_, i) => {
+                const a = (i * 30) * Math.PI / 180;
+                const x1 = ((HUB_R - 6) * Math.cos(a)).toFixed(2);
+                const y1 = ((HUB_R - 6) * Math.sin(a)).toFixed(2);
+                const x2 = ((HUB_R - 22) * Math.cos(a)).toFixed(2);
+                const y2 = ((HUB_R - 22) * Math.sin(a)).toFixed(2);
+                return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#C99320" stroke-width="1.6" stroke-linecap="round" opacity="0.55"/>`;
+            }).join('')}
+            <circle r="6" fill="#FFFAEC" stroke="#9B6B3A" stroke-width="1.2"/>
+            <circle r="2" fill="#9B6B3A"/>
+            <ellipse cx="${(-HUB_R * 0.35).toFixed(2)}" cy="${(-HUB_R * 0.45).toFixed(2)}" rx="${(HUB_R * 0.32).toFixed(2)}" ry="${(HUB_R * 0.18).toFixed(2)}" fill="rgba(255,255,255,.7)"/>
         `;
 
-        // winner 외곽 마커 (초기 hidden)
-        const winnerMarkerHtml = `<g class="ro-winner-marker" style="display:none">
-            <circle class="ro-winner-marker-outer" r="3.5" fill="${BRASS_HI}"/>
-            <circle r="1.4" fill="#FFF" opacity="0.9"/>
-        </g>`;
-
-        // 포인터 (고정, tilt 만 변경)
+        // 포인터 (coral arrow + yellow sun finial)
         const pointerHtml = `
-            <g class="ro-pointer-group" transform="translate(0 ${-(WHEEL_R + 22)})">
-                <circle cx="0" cy="-2" r="8" fill="url(#ro-ptr-brass)" stroke="${BRASS_SHADOW}" stroke-width="0.5" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,.6))"/>
-                <circle cx="-2" cy="-4" r="2.5" fill="rgba(255,255,255,.6)" filter="blur(0.5)"/>
-                <rect x="-3" y="4" width="6" height="14" rx="1.5" fill="url(#ro-ptr-brass)" stroke="${BRASS_SHADOW}" stroke-width="0.4"/>
-                <path d="M -14 18 L 14 18 L 0 50 Z" fill="url(#ro-ptr-brass)" stroke="${BRASS_SHADOW}" stroke-width="0.6" stroke-linejoin="round" style="filter: drop-shadow(0 3px 5px rgba(0,0,0,.55))"/>
-                <path d="M -10 19 L -1 19 L -4 26 Z" fill="rgba(255,255,255,.45)" filter="blur(0.5)"/>
-                <circle cx="0" cy="49" r="1.6" fill="${BRASS_SHADOW}"/>
+            <g class="ro-pointer-group" transform="translate(0 ${-(WHEEL_R + 32)})">
+                <circle cx="0" cy="-2" r="11" fill="#FFE9A8" stroke="#C99320" stroke-width="1.4"/>
+                <circle cx="0" cy="-2" r="6" fill="#FFFAEC" stroke="#C99320" stroke-width="0.9"/>
+                <circle cx="0" cy="-2" r="2.2" fill="#9B6B3A"/>
+                ${[0, 60, 120, 180, 240, 300].map(deg => {
+                    const a = (deg - 90) * Math.PI / 180;
+                    const x1 = (11 * Math.cos(a)).toFixed(2);
+                    const y1 = (-2 + 11 * Math.sin(a)).toFixed(2);
+                    const x2 = (15 * Math.cos(a)).toFixed(2);
+                    const y2 = (-2 + 15 * Math.sin(a)).toFixed(2);
+                    return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#C99320" stroke-width="1.4" stroke-linecap="round"/>`;
+                }).join('')}
+                <rect x="-4" y="10" width="8" height="14" fill="url(#ro-ptr)" rx="2" stroke="#C95E45" stroke-width="0.6"/>
+                <path d="M -18 24 L 18 24 L 0 64 Z" fill="url(#ro-ptr)" stroke="#C95E45" stroke-width="1.2" stroke-linejoin="round"/>
+                <path d="M -12 26 L -2 26 L -5 34 Z" fill="rgba(255,255,255,.55)"/>
+                <circle cx="0" cy="63" r="2" fill="#C95E45"/>
             </g>
         `;
 
-        const svgSize = (WHEEL_R + 40) * 2;
+        // wood pedestal (휠 하단)
+        const pedestalHtml = `
+            <g class="ro-pedestal" transform="translate(0 ${WHEEL_R + 60})">
+                <ellipse cx="0" cy="78" rx="220" ry="10" fill="rgba(60,40,20,.22)"/>
+                <path d="M -50 0 L 50 0 L 40 36 L -40 36 Z" fill="url(#ro-wood)" stroke="#9B6B3A" stroke-width="1"/>
+                <rect x="-44" y="6" width="88" height="3" rx="1.5" fill="rgba(255,255,255,.32)"/>
+                <rect x="-150" y="38" width="300" height="34" rx="10" fill="url(#ro-wood)" stroke="#9B6B3A" stroke-width="1"/>
+                <rect x="-144" y="42" width="288" height="4" rx="2" fill="rgba(255,255,255,.4)"/>
+                ${[-120, -60, 0, 60, 120].map(x => `
+                    <g><circle cx="${x}" cy="56" r="4" fill="#FFE9A8" stroke="#9B6B3A" stroke-width="0.8"/>
+                    <circle cx="${x}" cy="56" r="1.4" fill="#9B6B3A"/></g>
+                `).join('')}
+                <path d="M -170 72 L 170 72 L 150 130 L -150 130 Z" fill="url(#ro-wood)" stroke="#9B6B3A" stroke-width="1"/>
+                <rect x="-160" y="76" width="324" height="3" rx="1.5" fill="rgba(255,255,255,.32)"/>
+                <rect x="-160" y="126" width="320" height="14" rx="5" fill="#9B6B3A"/>
+                <rect x="-160" y="126" width="320" height="3" rx="1.5" fill="rgba(255,255,255,.18)"/>
+            </g>
+        `;
+
+        const svgSize = (WHEEL_R + 36) * 2 + 100; // 넉넉히 잡아 포인터/허브 잘림 방지
         const wheelWrap = document.createElement('div');
         wheelWrap.className = 'roulette-wheel-wrap';
         wheelWrap.innerHTML = `
-            <svg class="roulette-wheel-svg" viewBox="-${WHEEL_R + 40} -${WHEEL_R + 40} ${svgSize} ${svgSize}">
+            <svg class="roulette-wheel-svg" viewBox="-${WHEEL_R + 50} -${WHEEL_R + 50} ${svgSize} ${svgSize + 180}" preserveAspectRatio="xMidYMid meet">
                 <defs>
-                    <radialGradient id="ro-hub-base" cx="0.4" cy="0.35" r="0.7">
-                        <stop offset="0%" stop-color="#1E2540"/>
-                        <stop offset="60%" stop-color="#0B0F1F"/>
-                        <stop offset="100%" stop-color="#04060F"/>
+                    <radialGradient id="ro-hub-sun" cx="0.4" cy="0.35" r="0.7">
+                        <stop offset="0%"  stop-color="#FFFFFF"/>
+                        <stop offset="55%" stop-color="#FFE9A8"/>
+                        <stop offset="100%" stop-color="#F5C849"/>
                     </radialGradient>
-                    <radialGradient id="ro-hub-dome" cx="0.35" cy="0.3" r="0.75">
-                        <stop offset="0%" stop-color="#FFEBB8"/>
-                        <stop offset="22%" stop-color="${BRASS_HI}"/>
-                        <stop offset="55%" stop-color="${BRASS_MID}"/>
-                        <stop offset="85%" stop-color="${BRASS_LO}"/>
-                        <stop offset="100%" stop-color="${BRASS_SHADOW}"/>
-                    </radialGradient>
-                    <linearGradient id="ro-brass-ring" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stop-color="${BRASS_HI}"/>
-                        <stop offset="40%" stop-color="${BRASS_MID}"/>
-                        <stop offset="100%" stop-color="${BRASS_LO}"/>
+                    <linearGradient id="ro-rim" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#F5C849"/>
+                        <stop offset="100%" stop-color="#C99320"/>
                     </linearGradient>
-                    <linearGradient id="ro-ptr-brass" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stop-color="${BRASS_HI}"/>
-                        <stop offset="50%" stop-color="${BRASS_MID}"/>
-                        <stop offset="100%" stop-color="${BRASS_LO}"/>
+                    <linearGradient id="ro-ptr" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%"  stop-color="#FFB39B"/>
+                        <stop offset="55%" stop-color="#FF8E72"/>
+                        <stop offset="100%" stop-color="#E14B4B"/>
                     </linearGradient>
-                    <radialGradient id="ro-seg-shading" cx="0.5" cy="0.5" r="0.5">
-                        <stop offset="60%" stop-color="rgba(0,0,0,0)"/>
-                        <stop offset="100%" stop-color="rgba(0,0,0,.6)"/>
-                    </radialGradient>
+                    <linearGradient id="ro-wood" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%"  stop-color="#E0AC75"/>
+                        <stop offset="55%" stop-color="#C18548"/>
+                        <stop offset="100%" stop-color="#9B6B3A"/>
+                    </linearGradient>
                 </defs>
 
-                <ellipse cx="0" cy="${WHEEL_R + 18}" rx="${WHEEL_R * 0.95}" ry="14" fill="rgba(0,0,0,.7)" filter="blur(8)"/>
+                <!-- floor shadow -->
+                <ellipse cx="0" cy="${WHEEL_R + 22}" rx="${WHEEL_R * 0.92}" ry="14" fill="rgba(60,40,20,.22)"/>
 
-                <circle r="${WHEEL_R + 16}" fill="${BRASS_SHADOW}" opacity="0.5"/>
-                <circle r="${WHEEL_R + 12}" fill="url(#ro-brass-ring)"/>
-                <path d="M 0 ${-(WHEEL_R + 12)} A ${WHEEL_R + 12} ${WHEEL_R + 12} 0 0 1 ${WHEEL_R + 12} 0" stroke="rgba(255,255,255,.45)" stroke-width="1.5" fill="none" opacity="0.8"/>
-                <path d="M 0 ${WHEEL_R + 12} A ${WHEEL_R + 12} ${WHEEL_R + 12} 0 0 1 ${-(WHEEL_R + 12)} 0" stroke="rgba(0,0,0,.6)" stroke-width="1.5" fill="none"/>
+                <!-- pedestal (휠 뒤) -->
+                ${pedestalHtml}
 
-                <circle r="${WHEEL_R - 1}" fill="#06080F"/>
+                <!-- scallop rim -->
+                ${scallopHtml}
 
+                <!-- warm outer ring -->
+                <circle r="${WHEEL_R + 8}" fill="url(#ro-rim)"/>
+                <circle r="${WHEEL_R + 8}" fill="none" stroke="#9B6B3A" stroke-width="1.2" opacity="0.5"/>
+                <path d="M 0 ${-(WHEEL_R + 8)} A ${WHEEL_R + 8} ${WHEEL_R + 8} 0 0 1 ${WHEEL_R + 8} 0" stroke="rgba(255,255,255,.55)" stroke-width="1.4" fill="none"/>
+
+                <!-- inner cream disc -->
+                <circle r="${WHEEL_R - 1}" fill="#FFFAEC"/>
+
+                <!-- rotating group (segments + winner tint + dividers + sun dots + numbers + hub) -->
                 <g class="ro-wheel-rotating" transform="rotate(0)">
                     ${segmentsHtml}
                     ${winnerTintHtml}
-                    <circle r="${WHEEL_R - 4}" fill="url(#ro-seg-shading)" pointer-events="none"/>
                     ${dividersHtml}
-                    ${ticksHtml}
+                    ${sunDotsHtml}
                     ${numbersHtml}
-                    ${winnerMarkerHtml}
                     ${hubHtml}
                 </g>
 
+                <!-- 포인터 (고정, 회전 그룹 밖) -->
                 ${pointerHtml}
             </svg>
         `;
         stage.appendChild(wheelWrap);
 
-        // reveal 패널 wrap (rail + finial + plate)
+        // ── reveal — paper pennant + twine
         const revealWrap = document.createElement('div');
         revealWrap.className = 'roulette-reveal-wrap';
         revealWrap.setAttribute('aria-hidden', 'true');
         revealWrap.innerHTML = `
-            <div class="roulette-reveal-rail"></div>
-            <div class="roulette-reveal-finial"></div>
-            <div class="roulette-reveal-panel">
-                <div class="roulette-reveal-card">
-                    <div class="roulette-reveal-stripe"></div>
-                    <div class="roulette-reveal-body">
-                        <div class="roulette-reveal-eyebrow">선발 · ROUND <span class="roulette-reveal-round">01</span></div>
-                        <div class="roulette-reveal-name"></div>
-                        <div class="roulette-reveal-sub"></div>
-                    </div>
+            <svg class="roulette-reveal-twine" viewBox="0 0 280 80" preserveAspectRatio="none">
+                <path d="M 4 14 Q 90 50 270 60" stroke="${AR.twine}" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-dasharray="3 2.4" opacity="0.9"/>
+            </svg>
+            <div class="roulette-reveal-card">
+                <div class="roulette-reveal-grommet"></div>
+                <div class="roulette-reveal-grommet-hole"></div>
+                <div class="roulette-reveal-stripe"></div>
+                <div class="roulette-reveal-body">
+                    <div class="roulette-reveal-eyebrow">당첨 · ROUND <span class="roulette-reveal-round">01</span></div>
+                    <div class="roulette-reveal-name"></div>
+                    <div class="roulette-reveal-sub"></div>
                 </div>
             </div>
         `;
         stage.appendChild(revealWrap);
 
-        // 하단 rail (상태 + chips + 자동 진행 hint)
+        // ── 하단 rail
         const railEl = document.createElement('div');
         railEl.className = 'roulette-rail';
         railEl.innerHTML = `
@@ -331,7 +445,7 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
         `;
         stage.appendChild(railEl);
 
-        // 선발 완료 배너
+        // ── 선발 완료 배너
         const finishBanner = document.createElement('div');
         finishBanner.className = 'roulette-finish-banner';
         finishBanner.textContent = '선발 완료';
@@ -341,11 +455,13 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
         container.appendChild(stage);
         container.classList.add('roulette-active');
 
+        // ── threeCanvas 가리기 (다른 테마 잔존 픽셀 방지)
+        if (canvas && canvas.style) canvas.style.display = 'none';
+
         // ── DOM 참조
         const wheelRotatingGroup = wheelWrap.querySelector('.ro-wheel-rotating');
         const pointerGroup = wheelWrap.querySelector('.ro-pointer-group');
         const winnerTint = wheelWrap.querySelector('.ro-winner-tint');
-        const winnerMarker = wheelWrap.querySelector('.ro-winner-marker');
         const numberNodes = Array.from(wheelWrap.querySelectorAll('.ro-num'));
 
         const hudNumEl = hud.querySelector('.roulette-hud-num');
@@ -354,26 +470,21 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
         const revealRoundEl = revealWrap.querySelector('.roulette-reveal-round');
         const revealNameEl = revealWrap.querySelector('.roulette-reveal-name');
         const revealSubEl = revealWrap.querySelector('.roulette-reveal-sub');
+        const revealStripeEl = revealWrap.querySelector('.roulette-reveal-stripe');
 
         const railDot = railEl.querySelector('.roulette-rail-dot');
         const railStatusText = railEl.querySelector('.roulette-rail-status-text');
         const railChipsContainer = railEl.querySelector('.roulette-rail-chips');
         const railChipsEmpty = railEl.querySelector('.roulette-rail-chips-empty');
 
-        // 기존 .animation-message — 시각적으로 숨김 (CSS) 이지만 pickingMessage()
-        // 호출은 그대로 유지 (Math.min clamp 흐름 보존)
         const messageElement = document.querySelector('.animation-message');
-
         function updateMessage(message) {
             if (messageElement) messageElement.textContent = message;
         }
-
-        // 진행 카운터 메시지 — 분자가 분모를 초과하지 않게 clamp
         function pickingMessage() {
             const display = Math.min(currentPickIndex + 1, selectedStudents.length);
             return `${display}/${selectedStudents.length} 선발 중...`;
         }
-
         function updateHud() {
             const display = Math.min(currentPickIndex + 1, total);
             hudNumEl.textContent = String(display).padStart(2, '0');
@@ -400,60 +511,46 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
             gap: '다음 추첨 준비',
             finishing: '선발 완료',
         };
-
         function setRailPhase(phaseName) {
             railDot.setAttribute('data-phase', phaseName);
             railStatusText.textContent = PHASE_TEXT[phaseName] || '';
         }
 
-        function addChip(student) {
+        function addChip(student, segIdx) {
             if (railChipsEmpty && railChipsEmpty.parentElement) {
                 railChipsEmpty.remove();
             }
+            const col = SEG_COLORS[segIdx % SEG_COLORS.length];
             const chip = document.createElement('span');
             chip.className = 'roulette-rail-chip';
-            chip.textContent = student.name;
+            chip.innerHTML = `
+                <span class="roulette-rail-chip-pip" style="background:${col.c}; border-color:${col.d};">${String(segIdx + 1).padStart(2, '0')}</span>
+                <span class="roulette-rail-chip-name"></span>
+            `;
+            chip.querySelector('.roulette-rail-chip-name').textContent = student.name;
             railChipsContainer.appendChild(chip);
             const chips = railChipsContainer.querySelectorAll('.roulette-rail-chip');
             if (chips.length > 6) chips[0].remove();
         }
 
-        // ── winner 시각 강조 / 해제
         function highlightWinner(idx) {
             if (winnerTint) {
-                winnerTint.setAttribute('d', segPath(WHEEL_R - 4, HUB_R + 2, idx * SEG_DEG, (idx + 1) * SEG_DEG));
-                winnerTint.setAttribute('opacity', '0.16');
+                winnerTint.setAttribute('d', segPath(WHEEL_R - 6, HUB_R + 4, idx * SEG_DEG, (idx + 1) * SEG_DEG));
+                winnerTint.setAttribute('opacity', '0.32');
             }
             numberNodes.forEach((n, i) => {
                 if (i === idx) {
-                    n.setAttribute('fill', BRASS_HI);
                     n.setAttribute('opacity', '1');
                 } else {
-                    n.setAttribute('opacity', '0.45');
+                    n.setAttribute('opacity', '0.5');
                 }
             });
-            if (winnerMarker) {
-                const centerA = (idx + 0.5) * SEG_DEG;
-                const a = (centerA - 90) * Math.PI / 180;
-                const mx = ((WHEEL_R - 14) * Math.cos(a)).toFixed(2);
-                const my = ((WHEEL_R - 14) * Math.sin(a)).toFixed(2);
-                winnerMarker.setAttribute('transform', `translate(${mx} ${my}) rotate(${centerA.toFixed(2)})`);
-                winnerMarker.style.display = 'block';
-                const outer = winnerMarker.querySelector('.ro-winner-marker-outer');
-                if (outer) outer.setAttribute('filter', `drop-shadow(0 0 6px ${BRASS_HI})`);
-            }
         }
-
         function clearWinnerHighlight() {
             if (winnerTint) winnerTint.setAttribute('opacity', '0');
-            numberNodes.forEach((n) => {
-                n.setAttribute('fill', BRASS_HI);
-                n.setAttribute('opacity', '0.92');
-            });
-            if (winnerMarker) winnerMarker.style.display = 'none';
+            numberNodes.forEach(n => n.setAttribute('opacity', '0.95'));
         }
 
-        // ── winner segment 선택 — 가능한 한 라운드마다 다른 세그먼트
         function pickWinner() {
             const available = [];
             for (let i = 0; i < SEGMENTS; i++) {
@@ -468,8 +565,6 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
             return pick;
         }
 
-        // 휠을 target segment 가 12시(포인터) 아래로 오도록 안착시키는 각도 계산
-        // (3~4 바퀴 추가 회전 포함)
         function targetAngleForSegment(currentAngle, segIdx) {
             const required = ((-(segIdx + 0.5) * SEG_DEG) % 360 + 360) % 360;
             const minExtra = 360 * 3 + Math.random() * 360;
@@ -482,7 +577,6 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
 
         const easeOutQuart = (t) => 1 - Math.pow(1 - t, 4);
 
-        // ── phase 전환
         function transitionTo(newPhase, now) {
             phase = newPhase;
             phaseStartT = now;
@@ -508,8 +602,7 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
                 const endA = targetAngleForSegment(startA, winnerIdx);
                 trajectory = {
                     kind: 'ease',
-                    startA,
-                    endA,
+                    startA, endA,
                     startT: now,
                     duration: T.decel / 1000,
                 };
@@ -520,20 +613,21 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
                 setRailPhase('stop');
             } else if (newPhase === 'reveal') {
                 const student = selectedStudents[currentPickIndex];
+                const col = SEG_COLORS[winnerIdx % SEG_COLORS.length];
                 revealRoundEl.textContent = String(Math.min(currentPickIndex + 1, total)).padStart(2, '0');
                 revealNameEl.textContent = student.name;
                 const role = (window.AppState && window.AppState.purpose) ? String(window.AppState.purpose).trim() : '';
                 revealSubEl.textContent = role || '';
+                revealStripeEl.style.background = col.c;
+
                 revealWrap.classList.add('show');
                 revealWrap.setAttribute('aria-hidden', 'false');
                 wheelWrap.classList.add('dim');
                 stage.classList.add('dim');
 
-                // 기존 흐름: addPickedStudent → 사운드 큐
                 if (addPickedStudent) addPickedStudent(student);
-                addChip(student);
+                addChip(student, winnerIdx);
                 if (typeof soundManager !== 'undefined' && soundManager.playLotteryPick) {
-                    // 별도 룰렛 효과음이 없으므로 lottery pick 큐를 재사용 (sounds.js 수정 회피)
                     soundManager.playLotteryPick();
                 }
 
@@ -548,7 +642,6 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
                 setRailPhase('gap');
                 updateMessage(pickingMessage());
             } else if (newPhase === 'finishing') {
-                // 마지막 reveal 종료 직후 배경음 정리 — app.js 후속 stop 충돌 방지
                 if (!bgMusicStopped && window.AppState && window.AppState.bgMusicInterval) {
                     if (typeof soundManager !== 'undefined' && soundManager.stopSound) {
                         soundManager.stopSound(window.AppState.bgMusicInterval);
@@ -560,7 +653,7 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
                 revealWrap.setAttribute('aria-hidden', 'true');
                 wheelWrap.classList.remove('dim');
                 stage.classList.remove('dim');
-                isComplete = true;            // 카운터 메시지가 '선발 완료' 덮는 것 방지
+                isComplete = true;
                 setRailPhase('finishing');
                 finishBanner.classList.add('show');
                 finishBanner.setAttribute('aria-hidden', 'false');
@@ -568,7 +661,6 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
             }
         }
 
-        // ── trajectory 적용 — angle 갱신
         function applyTrajectoryAtTime(now) {
             if (!trajectory) return;
             const elapsed = (now - trajectory.startT) / 1000;
@@ -581,7 +673,6 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
             }
         }
 
-        // ── 포인터 tilt (회전 속도 + segPhase 기반 자연스러운 'tick tick')
         function updatePointer(dt) {
             if (!pointerGroup) return;
             const speedDeg = dt > 0 ? Math.abs((angle - lastAngle) / dt) : 0;
@@ -589,27 +680,23 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
             const segPhase = (((angle % SEG_DEG) + SEG_DEG) % SEG_DEG) / SEG_DEG;
             const energy = Math.min(speedDeg / 600, 1);
             const lean = segPhase < 0.18
-                ? -(segPhase / 0.18) * 8
-                : -((1 - segPhase) / 0.82) * 8;
+                ? -(segPhase / 0.18) * 9
+                : -((1 - segPhase) / 0.82) * 9;
             const tilt = lean * energy;
-            pointerGroup.setAttribute('transform', `translate(0 ${-(WHEEL_R + 22)}) rotate(${tilt.toFixed(2)})`);
+            pointerGroup.setAttribute('transform', `translate(0 ${-(WHEEL_R + 32)}) rotate(${tilt.toFixed(2)})`);
         }
 
-        // ── 메인 RAF 루프
+        // ── 메인 RAF
         function animate(now) {
-            // RAF 잔존으로 다른 테마 canvas 오염 방지
             if (isDisposed) return;
 
-            // 일시 중지 — phase/trajectory 시간을 freeze. pauseStartT 기록.
+            // 일시 중지
             if (window.AppState && window.AppState.isPaused) {
                 if (pauseStartT === null) pauseStartT = now;
                 lastT = now;
                 rafId = requestAnimationFrame(animate);
                 return;
             }
-
-            // 방금 resume — paused duration 만큼 모든 timestamp shift,
-            // 그래야 resume 직후 trajectory 가 fast-forward 되지 않음.
             if (pauseStartT !== null) {
                 const pausedDur = now - pauseStartT;
                 if (trajectory) trajectory.startT += pausedDur;
@@ -629,9 +716,7 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
             lastT = now;
             const elapsed = now - phaseStartT;
 
-            // phase machine
             if (phase === 'idle') {
-                // 천천히 드리프트하다 spin 진입
                 angle += 8 * dt;
                 if (elapsed > T.idle) transitionTo('spin', now);
             } else if (phase === 'spin') {
@@ -640,7 +725,7 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
             } else if (phase === 'decel') {
                 applyTrajectoryAtTime(now);
                 if (elapsed > T.decel) {
-                    if (trajectory) angle = trajectory.endA; // 정확히 snap
+                    if (trajectory) angle = trajectory.endA;
                     trajectory = null;
                     transitionTo('stop', now);
                 }
@@ -657,32 +742,27 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
             } else if (phase === 'gap') {
                 if (elapsed > T.gap) transitionTo('spin', now);
             } else if (phase === 'finishing') {
-                if (elapsed > T.finishing) {
+                if (elapsed > T.finishHold) {
                     cleanup();
                     resolve();
                     return;
                 }
             }
 
-            // 휠 회전 적용 (SVG transform 속성)
             if (wheelRotatingGroup) {
                 wheelRotatingGroup.setAttribute('transform', `rotate(${angle.toFixed(3)})`);
             }
-
             updatePointer(dt);
-
             if (!isComplete) updateHud();
 
             rafId = requestAnimationFrame(animate);
         }
 
-        // ── 리사이즈 — SVG/HTML 은 viewport 단위로 자동 응답
         function onWindowResize() {
-            // 별도 처리 불필요 — CSS 가 var(--wheel-svg-size) 로 즉시 재계산
+            // CSS 가 var() 기반으로 비례 스케일 — 별도 처리 불필요
         }
         window.addEventListener('resize', onWindowResize);
 
-        // ── 정리
         function cleanup() {
             isDisposed = true;
             if (rafId !== null) {
@@ -695,11 +775,10 @@ async function runRouletteAnimation(canvas, selectedStudents, addPickedStudent) 
             if (stage && stage.parentElement) {
                 stage.parentElement.removeChild(stage);
             }
+            if (canvas && canvas.style) canvas.style.display = '';
         }
 
         // ── 시작
-        // 첫 frame "render" 후 메시지 — DOM 마운트는 동기적으로 이미 그려졌으므로
-        // 다음 rAF tick 에서 메시지/HUD 를 적용한 뒤 메인 루프 진입.
         rafId = requestAnimationFrame(() => {
             if (isDisposed) return;
             updateMessage('룰렛을 돌리는 중...');
