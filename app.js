@@ -370,10 +370,20 @@ function initEventListeners() {
 function validateStep2() {
     const totalPick = parseInt(elements.totalPick.value);
     const useGender = elements.useGenderFilter.checked;
+    const hintEl = document.getElementById('genderSumHint');
+
+    // 안내 문구 초기화 헬퍼
+    const setHint = (msg) => {
+        if (hintEl) {
+            hintEl.textContent = msg || '';
+            hintEl.classList.toggle('is-error', Boolean(msg));
+        }
+    };
 
     // 총 선발 인원이 유효한지 확인
     if (isNaN(totalPick) || totalPick < 1) {
         elements.step2Next.disabled = true;
+        setHint('');
         return;
     }
 
@@ -381,15 +391,21 @@ function validateStep2() {
     if (useGender) {
         const femalePick = parseInt(elements.femalePick.value) || 0;
         const malePick = parseInt(elements.malePick.value) || 0;
+        const sum = femalePick + malePick;
 
-        // 합계가 총 인원과 일치하는지 확인
-        if (femalePick + malePick !== totalPick) {
+        // 합계가 총 인원과 일치하는지 확인 — 불일치 시 이유를 안내
+        if (sum !== totalPick) {
             elements.step2Next.disabled = true;
+            const diff = totalPick - sum;
+            setHint(diff > 0
+                ? `여학생·남학생 합이 ${sum}명입니다. 총 선발 인원(${totalPick}명)에 ${diff}명 부족합니다.`
+                : `여학생·남학생 합이 ${sum}명입니다. 총 선발 인원(${totalPick}명)보다 ${-diff}명 많습니다.`);
             return;
         }
     }
 
     // 모든 조건을 만족하면 다음 버튼 활성화
+    setHint('');
     elements.step2Next.disabled = false;
 }
 
@@ -527,20 +543,31 @@ function applyFileParseResult(result, fileName) {
     elements.fileDeleteBtn.style.display = 'inline-block';
 
     // 시트 선택 UI 표시 (다중 시트 Excel)
+    // 시트명은 업로드 파일에서 온 값이므로 DOM API 로 안전하게 구성 (HTML 주입 방지)
     if (result.sheetNames && result.sheetNames.length > 1) {
         const selectorEl = document.createElement('div');
         selectorEl.className = 'sheet-selector';
-        selectorEl.innerHTML = `
-            <label for="sheetSelect">시트 선택:</label>
-            <select id="sheetSelect" aria-label="Excel 시트 선택">
-                ${result.sheetNames.map(name =>
-                    `<option value="${name}" ${name === result.currentSheet ? 'selected' : ''}>${name}</option>`
-                ).join('')}
-            </select>
-        `;
+
+        const selectLabel = document.createElement('label');
+        selectLabel.setAttribute('for', 'sheetSelect');
+        selectLabel.textContent = '시트 선택:';
+
+        const selectEl = document.createElement('select');
+        selectEl.id = 'sheetSelect';
+        selectEl.setAttribute('aria-label', 'Excel 시트 선택');
+        result.sheetNames.forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            if (name === result.currentSheet) opt.selected = true;
+            selectEl.appendChild(opt);
+        });
+
+        selectorEl.appendChild(selectLabel);
+        selectorEl.appendChild(selectEl);
         elements.fileInfo.parentNode.insertBefore(selectorEl, elements.fileInfo.nextSibling);
 
-        document.getElementById('sheetSelect').addEventListener('change', (e) => {
+        selectEl.addEventListener('change', (e) => {
             try {
                 const newResult = window.FileParsers.parseExcelSheet(
                     AppState._lastFileBuffer, e.target.value
@@ -670,42 +697,6 @@ function parseCSV(text) {
             AppState.students.push(student);
         }
     }
-}
-
-// Opt-out 리스트 렌더링
-function renderOptoutList() {
-    elements.optoutContainer.innerHTML = '';
-
-    AppState.students.forEach((student, index) => {
-        const label = document.createElement('label');
-        label.className = 'student-checkbox';
-
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.id = `student-${index}`;
-        checkbox.value = index;
-
-        checkbox.addEventListener('change', (e) => {
-            if (e.target.checked) {
-                AppState.excludedStudents.add(index);
-                label.classList.add('excluded');
-            } else {
-                AppState.excludedStudents.delete(index);
-                label.classList.remove('excluded');
-            }
-        });
-
-        const info = document.createElement('div');
-        info.className = 'student-info';
-        info.innerHTML = `
-            <div class="student-name">${student.name}</div>
-            <div class="student-details">${student.grade}학년 ${student.class}반 ${student.number}번 (${student.gender})</div>
-        `;
-
-        label.appendChild(checkbox);
-        label.appendChild(info);
-        elements.optoutContainer.appendChild(label);
-    });
 }
 
 // 학생 선발 시작
@@ -1038,17 +1029,50 @@ function resumePicking() {
     // 애니메이션은 자동으로 재개됨
 }
 
+// 결과 카드 한 개 생성 (이름은 사용자 업로드 데이터이므로 textContent 로 안전하게 주입)
+function createResultItem(number, displayName, extraClass) {
+    const div = document.createElement('div');
+    div.className = extraClass ? `result-item ${extraClass}` : 'result-item';
+
+    const numberEl = document.createElement('span');
+    numberEl.className = 'result-number';
+    numberEl.textContent = number;
+
+    const wrap = document.createElement('div');
+    wrap.style.display = 'inline-block';
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'result-name';
+    nameEl.textContent = displayName;
+
+    wrap.appendChild(nameEl);
+    div.appendChild(numberEl);
+    div.appendChild(wrap);
+    return div;
+}
+
 // 결과 표시
 function displayResults() {
     // 축하 메시지 표시
     const purpose = elements.purpose.value.trim();
     if (purpose) {
         elements.congratulationsMessage.style.display = 'block';
-        elements.congratulationsMessage.innerHTML = `
-            <span class="congrats-label">선발 완료</span>
-            <h3 class="congrats-title">${purpose}</h3>
-            <p class="congrats-sub">축하합니다</p>
-        `;
+        elements.congratulationsMessage.innerHTML = '';
+
+        const label = document.createElement('span');
+        label.className = 'congrats-label';
+        label.textContent = '선발 완료';
+
+        // 역할명은 사용자 입력이므로 textContent 로 주입 (HTML 주입 방지)
+        const title = document.createElement('h3');
+        title.className = 'congrats-title';
+        title.textContent = purpose;
+
+        const sub = document.createElement('p');
+        sub.className = 'congrats-sub';
+        sub.textContent = '축하합니다';
+
+        elements.congratulationsMessage.append(label, title, sub);
     } else {
         elements.congratulationsMessage.style.display = 'none';
     }
@@ -1058,16 +1082,7 @@ function displayResults() {
     // 이번 라운드 결과 표시
     AppState.pickResults.forEach((student, index) => {
         const displayName = getDisplayName(student, AppState.pickResults);
-
-        const div = document.createElement('div');
-        div.className = 'result-item';
-        div.innerHTML = `
-            <span class="result-number">${index + 1}</span>
-            <div style="display: inline-block;">
-                <div class="result-name">${displayName}</div>
-            </div>
-        `;
-        elements.resultContainer.appendChild(div);
+        elements.resultContainer.appendChild(createResultItem(index + 1, displayName));
     });
 
     // 이전 라운드 누적 결과가 있으면 표시
@@ -1076,20 +1091,17 @@ function displayResults() {
     if (previousPicked.length > 0) {
         const separator = document.createElement('div');
         separator.className = 'result-previous-section';
-        separator.innerHTML = `<h3 class="result-previous-title">이전 선발 결과 (${previousPicked.length}명)</h3>`;
+        const prevTitle = document.createElement('h3');
+        prevTitle.className = 'result-previous-title';
+        prevTitle.textContent = `이전 선발 결과 (${previousPicked.length}명)`;
+        separator.appendChild(prevTitle);
         elements.resultContainer.appendChild(separator);
 
         previousPicked.forEach((student, index) => {
             const displayName = getDisplayName(student, previousPicked);
-            const div = document.createElement('div');
-            div.className = 'result-item result-item-previous';
-            div.innerHTML = `
-                <span class="result-number">${index + 1}</span>
-                <div style="display: inline-block;">
-                    <div class="result-name">${displayName}</div>
-                </div>
-            `;
-            elements.resultContainer.appendChild(div);
+            elements.resultContainer.appendChild(
+                createResultItem(index + 1, displayName, 'result-item-previous')
+            );
         });
     }
 

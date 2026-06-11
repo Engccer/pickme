@@ -634,6 +634,18 @@ a { color: inherit; }
     letter-spacing: -0.005em;
 }
 
+/* 성별 조건 합계 안내: 비었으면 공간 차지 안 함, 불일치 시 강조 */
+.gender-sum-hint {
+    margin-top: 8px;
+    min-height: 0;
+}
+.gender-sum-hint:empty {
+    display: none;
+}
+.gender-sum-hint.is-error {
+    color: var(--danger-color);
+}
+
 /* — input + 단위 pill 합성 — */
 .field-unit {
     position: relative;
