@@ -21,6 +21,7 @@ const AppState = {
     tempStudents: [], // 직접 입력 시 임시 저장
     disableSecretPickOnce: false, // 일회성 비밀 선발 제외 플래그
     detectedFormat: null, // 감지된 CSV 형식: 'grid' 또는 'roster'
+    ttsEnabled: true, // 선발 순간 이름 TTS 음성 안내 (localStorage 로 복원, 기본 켜짐)
     _lastFileBuffer: null, // 파일 업로드 시 원본 ArrayBuffer (시트 전환용)
     _lastFileName: null, // 마지막 업로드 파일명
     _loadedRecentClassId: null // 현재 불러온 최근 학급 ID
@@ -84,6 +85,7 @@ const elements = {
     themeCards: [],
     step3Back: null,
     startBtn: null,
+    ttsToggle: null,
 
     // 애니메이션
     animationContainer: null,
@@ -114,6 +116,7 @@ const elements = {
 document.addEventListener('DOMContentLoaded', () => {
     initElements();
     initEventListeners();
+    initTts();
 });
 
 // DOM 요소 초기화
@@ -175,6 +178,7 @@ function initElements() {
     elements.themeCards = document.querySelectorAll('.theme-card');
     elements.step3Back = document.getElementById('step3Back');
     elements.startBtn = document.getElementById('startBtn');
+    elements.ttsToggle = document.getElementById('ttsToggle');
 
     // 애니메이션
     elements.animationContainer = document.getElementById('animationContainer');
@@ -257,6 +261,9 @@ function initEventListeners() {
     let clickCount = 0;
 
     elements.startBtn.addEventListener('click', (e) => {
+        // 사용자 제스처(클릭) 동기 컨텍스트에서 TTS 엔진 unlock — iOS Safari 대응
+        warmUpTts();
+
         clickCount++;
 
         if (clickCount === 1) {
@@ -307,6 +314,11 @@ function initEventListeners() {
         }
     });
 
+    // 이름 음성 안내 토글
+    if (elements.ttsToggle) {
+        elements.ttsToggle.addEventListener('change', handleTtsToggle);
+    }
+
     // 중지/재개
     elements.pauseBtn.addEventListener('click', pausePicking);
     elements.resumeBtn.addEventListener('click', resumePicking);
@@ -321,6 +333,9 @@ function initEventListeners() {
             soundManager.stopSound(AppState.bgMusicInterval);
             AppState.bgMusicInterval = null;
         }
+
+        // 진행 중 이름 발화 중단
+        cancelSpeech();
 
         // 버튼 상태 복원
         elements.pauseBtn.innerHTML = '일시 정지';
@@ -950,6 +965,9 @@ function addPickedStudent(student) {
     // 스크린 리더 안내
     announceToScreenReader(`${displayName} 선발됨`);
 
+    // 이름 음성 안내 (토글 켜짐 + 지원 브라우저에서만)
+    speakStudentName(displayName);
+
     // 스크롤
     elements.pickedStudentsLiveEl.scrollTop = elements.pickedStudentsLiveEl.scrollHeight;
 }
@@ -999,6 +1017,9 @@ function pausePicking() {
 
     // 사운드 — masterGain 페이드 아웃 + loop 의 새 burst 생성 skip
     if (soundManager.setPaused) soundManager.setPaused(true);
+
+    // 진행 중 이름 발화 중단 (멈춘 뒤 계속 읽히지 않게)
+    cancelSpeech();
 }
 
 // 재개
@@ -1159,6 +1180,9 @@ function continuePicking() {
         AppState.bgMusicInterval = null;
     }
 
+    // 이전 라운드 이름 발화 정리
+    cancelSpeech();
+
     // 결과 화면 숨기고 Step 3 (테마 선택)으로 이동
     elements.resultSection.style.display = 'none';
     elements.animationContainer.classList.remove('fullscreen-animation');
@@ -1208,6 +1232,9 @@ function resetSettings() {
         AppState.bgMusicInterval = null;
     }
 
+    // 이름 발화 정리
+    cancelSpeech();
+
     // UI 초기화
     elements.resultSection.style.display = 'none';
     elements.animationContainer.classList.remove('fullscreen-animation');
@@ -1246,6 +1273,9 @@ function resetApp() {
     AppState.isPaused = false;
     AppState.shouldStop = false;
     AppState.pickedStudentsLive = [];
+
+    // 이름 발화 정리
+    cancelSpeech();
 
     // 앰비언트 사운드 중지
     if (AppState.ambientSoundInterval) {
@@ -1302,6 +1332,116 @@ function announceToScreenReader(message) {
             }, 3000);
         }, 100);
     }
+}
+
+// ===== 이름 음성 안내 (TTS) =====
+//
+// 브라우저 내장 Web Speech API(window.speechSynthesis) 로 선발 순간 이름을 음성 재생한다.
+//  - 외부 음원/API 키 없이 동작 → 정적 배포(GitHub Pages) 그대로 유지.
+//  - 스크린리더 사용 시 음성이 이중으로 들리므로 사용자가 토글로 끌 수 있다 (기본 켜짐).
+//  - 미지원 브라우저에서는 모든 호출이 조용히 무시되어 기존 흐름에 영향이 없다.
+//  - getDisplayName() 결과(동명이인 시 구분 정보 포함)를 그대로 읽어 화면 표시와 음성을 일치시킨다.
+
+const TTS_STORAGE_KEY = 'pickme-tts-enabled';
+let _ttsVoice = null; // 선택된 한국어 음성 (voiceschanged 후 캐시)
+
+function _ttsSupported() {
+    return typeof window !== 'undefined' && 'speechSynthesis' in window
+        && typeof window.SpeechSynthesisUtterance === 'function';
+}
+
+// getVoices() 에서 한국어 음성을 고른다. 없으면 null (OS 기본 음성 사용).
+function _pickKoreanVoice() {
+    if (!_ttsSupported()) return null;
+    const voices = window.speechSynthesis.getVoices();
+    if (!voices || !voices.length) return null;
+    return voices.find(v => v.lang === 'ko-KR')
+        || voices.find(v => v.lang && v.lang.toLowerCase().startsWith('ko'))
+        || null;
+}
+
+// 초기화 — localStorage 복원 + voices 비동기 로드 대응. DOMContentLoaded 시 1회 호출.
+function initTts() {
+    // 미지원 브라우저: 토글 비활성화 + 안내, 기능 차단
+    if (!_ttsSupported()) {
+        AppState.ttsEnabled = false;
+        if (elements.ttsToggle) {
+            elements.ttsToggle.checked = false;
+            elements.ttsToggle.disabled = true;
+        }
+        return;
+    }
+
+    // 저장된 설정 복원 (기본 켜짐)
+    const saved = localStorage.getItem(TTS_STORAGE_KEY);
+    AppState.ttsEnabled = saved === null ? true : saved === 'true';
+    if (elements.ttsToggle) {
+        elements.ttsToggle.checked = AppState.ttsEnabled;
+    }
+
+    // 한국어 음성 캐시 — voices 는 비동기 로드되므로 이벤트로 갱신
+    _ttsVoice = _pickKoreanVoice();
+    if (typeof window.speechSynthesis.addEventListener === 'function') {
+        window.speechSynthesis.addEventListener('voiceschanged', () => {
+            _ttsVoice = _pickKoreanVoice();
+        });
+    } else {
+        window.speechSynthesis.onvoiceschanged = () => {
+            _ttsVoice = _pickKoreanVoice();
+        };
+    }
+}
+
+// 선발 순간 이름 발화. 토글이 꺼져 있거나 미지원이면 조용히 무시.
+function speakStudentName(name) {
+    if (!AppState.ttsEnabled || !_ttsSupported() || !name) return;
+    try {
+        const utterance = new SpeechSynthesisUtterance(String(name));
+        utterance.lang = 'ko-KR';
+        utterance.rate = 1.05; // 교실 빔프로젝터에서 또렷하게
+        if (!_ttsVoice) _ttsVoice = _pickKoreanVoice();
+        if (_ttsVoice) utterance.voice = _ttsVoice;
+        window.speechSynthesis.speak(utterance);
+    } catch (error) {
+        // TTS 실패가 선발 흐름을 막지 않도록 무시
+        console.warn('TTS speak failed:', error);
+    }
+}
+
+// 발화 큐 비우기 — 일시정지/중단/리셋 시 호출해 멈춘 뒤 이름이 계속 읽히지 않게 한다.
+function cancelSpeech() {
+    if (!_ttsSupported()) return;
+    try {
+        window.speechSynthesis.cancel();
+    } catch (error) {
+        // 무시
+    }
+}
+
+// 첫 발화 unlock (iOS Safari 등은 user gesture 안에서 1회 speak 필요). 선발 시작 클릭 시 호출.
+function warmUpTts() {
+    if (!AppState.ttsEnabled || !_ttsSupported()) return;
+    try {
+        if (!_ttsVoice) _ttsVoice = _pickKoreanVoice();
+        const primer = new SpeechSynthesisUtterance(' ');
+        primer.volume = 0; // 무음 — 엔진만 깨운다
+        window.speechSynthesis.speak(primer);
+    } catch (error) {
+        // 무시
+    }
+}
+
+// 토글 change 핸들러 — 상태 저장 + 끌 때 진행 중 발화 정리.
+function handleTtsToggle() {
+    if (!elements.ttsToggle) return;
+    AppState.ttsEnabled = elements.ttsToggle.checked;
+    try {
+        localStorage.setItem(TTS_STORAGE_KEY, String(AppState.ttsEnabled));
+    } catch (error) {
+        // localStorage 불가 환경 무시
+    }
+    if (!AppState.ttsEnabled) cancelSpeech();
+    announceToScreenReader(AppState.ttsEnabled ? '이름 음성 안내를 켰습니다' : '이름 음성 안내를 껐습니다');
 }
 
 // ===== 직접 입력 기능 =====

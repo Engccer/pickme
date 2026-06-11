@@ -1653,6 +1653,49 @@ a { color: inherit; }
    Navigation + Start button
    ========================================================= */
 
+/* 이름 음성 안내 토글 (Step 3) — 절제된 보라 액센트 체크박스 */
+.tts-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    margin-top: 18px;
+    text-align: center;
+}
+
+.tts-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    cursor: pointer;
+    font-size: 0.94rem;
+    font-weight: 600;
+    color: var(--ink);
+    user-select: none;
+}
+
+.tts-toggle input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.tts-toggle input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 3px;
+}
+
+.tts-toggle input:disabled { cursor: not-allowed; }
+.tts-toggle input:disabled + .tts-toggle-text { color: var(--text-dim); }
+
+.tts-option-hint {
+    font-size: 0.8rem;
+    color: var(--muted);
+}
+
 .step-navigation {
     display: flex;
     justify-content: space-between;
