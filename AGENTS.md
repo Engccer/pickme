@@ -1,3 +1,9 @@
+> 🤖 **이 파일은 자동 생성됩니다. 직접 수정하지 마세요.**
+> 정본은 `CLAUDE.md` 입니다. 내용을 바꾸려면 `CLAUDE.md` 를 수정한 뒤
+> 프로젝트 루트에서 `python sync_agent_docs.py` 를 실행하세요.
+> 이 파일을 직접 고치면 다음 동기화 때 경고와 함께 덮어쓰기 대상이 됩니다.
+
+<!-- SYNC-BODY-START: 이 줄 아래 본문은 CLAUDE.md 와 100% 동일하게 자동 생성됨 -->
 이 프로젝트는 빌드 도구 없는 바닐라 HTML/CSS/JS 프로젝트이다.
 
 - HTML: 단일 페이지 위저드 UI
@@ -149,8 +155,6 @@ tabindex
 focus-visible 스타일
 
 접근성 속성을 수정할 경우, 의미가 더 명확해지는 방향으로만 수정한다.
-
-접근성의 기준 정본은 글로벌 접근성 헌장 `~/.claude/ACCESSIBILITY.md`다(미니멀 ARIA: WCAG 실질 요구는 100% 지키되 과잉 ARIA는 제거). 위 목록은 "삭제 금지" 안전장치이지 "ARIA를 더 붙이라"는 뜻이 아니다. 신규·수정 시 헌장의 "올바른 시맨틱 + 한 줄=한 접근성 객체"를 따른다. 이 repo 고유 구현: `announceToScreenReader()`가 단일 live region(`srAnnounce`)에 상태를 통지하고, Three.js 캔버스는 스크린 리더가 접근할 수 없으므로 텍스트 대안을 반드시 유지한다.
 
 Design Direction
 Core Principle

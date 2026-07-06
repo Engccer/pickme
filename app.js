@@ -21,6 +21,7 @@ const AppState = {
     tempStudents: [], // 직접 입력 시 임시 저장
     disableSecretPickOnce: false, // 일회성 비밀 선발 제외 플래그
     detectedFormat: null, // 감지된 CSV 형식: 'grid' 또는 'roster'
+    ttsEnabled: true, // 선발 순간 이름 TTS 음성 안내 (localStorage 로 복원, 기본 켜짐)
     _lastFileBuffer: null, // 파일 업로드 시 원본 ArrayBuffer (시트 전환용)
     _lastFileName: null, // 마지막 업로드 파일명
     _loadedRecentClassId: null // 현재 불러온 최근 학급 ID
@@ -84,6 +85,7 @@ const elements = {
     themeCards: [],
     step3Back: null,
     startBtn: null,
+    ttsToggle: null,
 
     // 애니메이션
     animationContainer: null,
@@ -114,6 +116,7 @@ const elements = {
 document.addEventListener('DOMContentLoaded', () => {
     initElements();
     initEventListeners();
+    initTts();
 });
 
 // DOM 요소 초기화
@@ -175,6 +178,7 @@ function initElements() {
     elements.themeCards = document.querySelectorAll('.theme-card');
     elements.step3Back = document.getElementById('step3Back');
     elements.startBtn = document.getElementById('startBtn');
+    elements.ttsToggle = document.getElementById('ttsToggle');
 
     // 애니메이션
     elements.animationContainer = document.getElementById('animationContainer');
@@ -257,6 +261,9 @@ function initEventListeners() {
     let clickCount = 0;
 
     elements.startBtn.addEventListener('click', (e) => {
+        // 사용자 제스처(클릭) 동기 컨텍스트에서 TTS 엔진 unlock — iOS Safari 대응
+        warmUpTts();
+
         clickCount++;
 
         if (clickCount === 1) {
@@ -307,6 +314,11 @@ function initEventListeners() {
         }
     });
 
+    // 이름 음성 안내 토글
+    if (elements.ttsToggle) {
+        elements.ttsToggle.addEventListener('change', handleTtsToggle);
+    }
+
     // 중지/재개
     elements.pauseBtn.addEventListener('click', pausePicking);
     elements.resumeBtn.addEventListener('click', resumePicking);
@@ -322,8 +334,11 @@ function initEventListeners() {
             AppState.bgMusicInterval = null;
         }
 
+        // 진행 중 이름 발화 중단
+        cancelSpeech();
+
         // 버튼 상태 복원
-        elements.pauseBtn.innerHTML = '⏸ 일시 정지';
+        elements.pauseBtn.innerHTML = '일시 정지';
         elements.pauseBtn.setAttribute('aria-label', '일시 정지');
         elements.pauseBtn.disabled = false;
 
@@ -355,10 +370,20 @@ function initEventListeners() {
 function validateStep2() {
     const totalPick = parseInt(elements.totalPick.value);
     const useGender = elements.useGenderFilter.checked;
+    const hintEl = document.getElementById('genderSumHint');
+
+    // 안내 문구 초기화 헬퍼
+    const setHint = (msg) => {
+        if (hintEl) {
+            hintEl.textContent = msg || '';
+            hintEl.classList.toggle('is-error', Boolean(msg));
+        }
+    };
 
     // 총 선발 인원이 유효한지 확인
     if (isNaN(totalPick) || totalPick < 1) {
         elements.step2Next.disabled = true;
+        setHint('');
         return;
     }
 
@@ -366,15 +391,21 @@ function validateStep2() {
     if (useGender) {
         const femalePick = parseInt(elements.femalePick.value) || 0;
         const malePick = parseInt(elements.malePick.value) || 0;
+        const sum = femalePick + malePick;
 
-        // 합계가 총 인원과 일치하는지 확인
-        if (femalePick + malePick !== totalPick) {
+        // 합계가 총 인원과 일치하는지 확인 — 불일치 시 이유를 안내
+        if (sum !== totalPick) {
             elements.step2Next.disabled = true;
+            const diff = totalPick - sum;
+            setHint(diff > 0
+                ? `여학생·남학생 합이 ${sum}명입니다. 총 선발 인원(${totalPick}명)에 ${diff}명 부족합니다.`
+                : `여학생·남학생 합이 ${sum}명입니다. 총 선발 인원(${totalPick}명)보다 ${-diff}명 많습니다.`);
             return;
         }
     }
 
     // 모든 조건을 만족하면 다음 버튼 활성화
+    setHint('');
     elements.step2Next.disabled = false;
 }
 
@@ -512,20 +543,31 @@ function applyFileParseResult(result, fileName) {
     elements.fileDeleteBtn.style.display = 'inline-block';
 
     // 시트 선택 UI 표시 (다중 시트 Excel)
+    // 시트명은 업로드 파일에서 온 값이므로 DOM API 로 안전하게 구성 (HTML 주입 방지)
     if (result.sheetNames && result.sheetNames.length > 1) {
         const selectorEl = document.createElement('div');
         selectorEl.className = 'sheet-selector';
-        selectorEl.innerHTML = `
-            <label for="sheetSelect">시트 선택:</label>
-            <select id="sheetSelect" aria-label="Excel 시트 선택">
-                ${result.sheetNames.map(name =>
-                    `<option value="${name}" ${name === result.currentSheet ? 'selected' : ''}>${name}</option>`
-                ).join('')}
-            </select>
-        `;
+
+        const selectLabel = document.createElement('label');
+        selectLabel.setAttribute('for', 'sheetSelect');
+        selectLabel.textContent = '시트 선택:';
+
+        const selectEl = document.createElement('select');
+        selectEl.id = 'sheetSelect';
+        selectEl.setAttribute('aria-label', 'Excel 시트 선택');
+        result.sheetNames.forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            if (name === result.currentSheet) opt.selected = true;
+            selectEl.appendChild(opt);
+        });
+
+        selectorEl.appendChild(selectLabel);
+        selectorEl.appendChild(selectEl);
         elements.fileInfo.parentNode.insertBefore(selectorEl, elements.fileInfo.nextSibling);
 
-        document.getElementById('sheetSelect').addEventListener('change', (e) => {
+        selectEl.addEventListener('change', (e) => {
             try {
                 const newResult = window.FileParsers.parseExcelSheet(
                     AppState._lastFileBuffer, e.target.value
@@ -655,42 +697,6 @@ function parseCSV(text) {
             AppState.students.push(student);
         }
     }
-}
-
-// Opt-out 리스트 렌더링
-function renderOptoutList() {
-    elements.optoutContainer.innerHTML = '';
-
-    AppState.students.forEach((student, index) => {
-        const label = document.createElement('label');
-        label.className = 'student-checkbox';
-
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.id = `student-${index}`;
-        checkbox.value = index;
-
-        checkbox.addEventListener('change', (e) => {
-            if (e.target.checked) {
-                AppState.excludedStudents.add(index);
-                label.classList.add('excluded');
-            } else {
-                AppState.excludedStudents.delete(index);
-                label.classList.remove('excluded');
-            }
-        });
-
-        const info = document.createElement('div');
-        info.className = 'student-info';
-        info.innerHTML = `
-            <div class="student-name">${student.name}</div>
-            <div class="student-details">${student.grade}학년 ${student.class}반 ${student.number}번 (${student.gender})</div>
-        `;
-
-        label.appendChild(checkbox);
-        label.appendChild(info);
-        elements.optoutContainer.appendChild(label);
-    });
 }
 
 // 학생 선발 시작
@@ -882,6 +888,12 @@ async function runThemeAnimation() {
     elements.steps[3].style.display = 'none';
     elements.steps[3].classList.remove('active');
 
+    // 이전 라운드의 메시지 잔재 제거 — 검은 화면에 글자만 먼저 뜨는 문제 방지
+    // (각 테마가 첫 프레임 render 직후 메시지를 다시 채움)
+    if (elements.animationMessage) {
+        elements.animationMessage.textContent = '';
+    }
+
     // 애니메이션 컨테이너 전체화면 표시
     elements.animationContainer.style.display = 'block';
     elements.animationContainer.classList.add('fullscreen-animation');
@@ -944,6 +956,9 @@ function addPickedStudent(student) {
     // 스크린 리더 안내
     announceToScreenReader(`${displayName} 선발됨`);
 
+    // 이름 음성 안내 (토글 켜짐 + 지원 브라우저에서만)
+    speakStudentName(displayName);
+
     // 스크롤
     elements.pickedStudentsLiveEl.scrollTop = elements.pickedStudentsLiveEl.scrollHeight;
 }
@@ -987,9 +1002,15 @@ function pausePicking() {
     elements.pauseMenu.style.display = 'flex';
 
     // 버튼 문구 변경
-    elements.pauseBtn.innerHTML = '⏸ 일시 정지됨';
+    elements.pauseBtn.innerHTML = '일시 정지됨';
     elements.pauseBtn.setAttribute('aria-label', '일시 정지됨');
     elements.pauseBtn.disabled = true;
+
+    // 사운드 — masterGain 페이드 아웃 + loop 의 새 burst 생성 skip
+    if (soundManager.setPaused) soundManager.setPaused(true);
+
+    // 진행 중 이름 발화 중단 (멈춘 뒤 계속 읽히지 않게)
+    cancelSpeech();
 }
 
 // 재개
@@ -998,11 +1019,36 @@ function resumePicking() {
     elements.pauseMenu.style.display = 'none';
 
     // 버튼 문구 복원
-    elements.pauseBtn.innerHTML = '⏸ 일시 정지';
+    elements.pauseBtn.innerHTML = '일시 정지';
     elements.pauseBtn.setAttribute('aria-label', '일시 정지');
     elements.pauseBtn.disabled = false;
 
+    // 사운드 — 사용자 master volume 으로 ramp up
+    if (soundManager.setPaused) soundManager.setPaused(false);
+
     // 애니메이션은 자동으로 재개됨
+}
+
+// 결과 카드 한 개 생성 (이름은 사용자 업로드 데이터이므로 textContent 로 안전하게 주입)
+function createResultItem(number, displayName, extraClass) {
+    const div = document.createElement('div');
+    div.className = extraClass ? `result-item ${extraClass}` : 'result-item';
+
+    const numberEl = document.createElement('span');
+    numberEl.className = 'result-number';
+    numberEl.textContent = number;
+
+    const wrap = document.createElement('div');
+    wrap.style.display = 'inline-block';
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'result-name';
+    nameEl.textContent = displayName;
+
+    wrap.appendChild(nameEl);
+    div.appendChild(numberEl);
+    div.appendChild(wrap);
+    return div;
 }
 
 // 결과 표시
@@ -1011,14 +1057,22 @@ function displayResults() {
     const purpose = elements.purpose.value.trim();
     if (purpose) {
         elements.congratulationsMessage.style.display = 'block';
-        elements.congratulationsMessage.innerHTML = `
-            <h3>🎉 축하합니다! 🎉</h3>
-            <p><strong>${purpose}</strong>로 선발된 것을 축하합니다!</p>
-            <img src="https://media.giphy.com/media/g9582DNuQppxC/giphy.gif"
-                 alt="축하 애니메이션"
-                 class="congratulations-gif"
-                 onerror="this.style.display='none'">
-        `;
+        elements.congratulationsMessage.innerHTML = '';
+
+        const label = document.createElement('span');
+        label.className = 'congrats-label';
+        label.textContent = '선발 완료';
+
+        // 역할명은 사용자 입력이므로 textContent 로 주입 (HTML 주입 방지)
+        const title = document.createElement('h3');
+        title.className = 'congrats-title';
+        title.textContent = purpose;
+
+        const sub = document.createElement('p');
+        sub.className = 'congrats-sub';
+        sub.textContent = '축하합니다';
+
+        elements.congratulationsMessage.append(label, title, sub);
     } else {
         elements.congratulationsMessage.style.display = 'none';
     }
@@ -1028,16 +1082,7 @@ function displayResults() {
     // 이번 라운드 결과 표시
     AppState.pickResults.forEach((student, index) => {
         const displayName = getDisplayName(student, AppState.pickResults);
-
-        const div = document.createElement('div');
-        div.className = 'result-item';
-        div.innerHTML = `
-            <span class="result-number">${index + 1}</span>
-            <div style="display: inline-block;">
-                <div class="result-name">${displayName}</div>
-            </div>
-        `;
-        elements.resultContainer.appendChild(div);
+        elements.resultContainer.appendChild(createResultItem(index + 1, displayName));
     });
 
     // 이전 라운드 누적 결과가 있으면 표시
@@ -1046,20 +1091,17 @@ function displayResults() {
     if (previousPicked.length > 0) {
         const separator = document.createElement('div');
         separator.className = 'result-previous-section';
-        separator.innerHTML = `<h3 class="result-previous-title">이전 선발 결과 (${previousPicked.length}명)</h3>`;
+        const prevTitle = document.createElement('h3');
+        prevTitle.className = 'result-previous-title';
+        prevTitle.textContent = `이전 선발 결과 (${previousPicked.length}명)`;
+        separator.appendChild(prevTitle);
         elements.resultContainer.appendChild(separator);
 
         previousPicked.forEach((student, index) => {
             const displayName = getDisplayName(student, previousPicked);
-            const div = document.createElement('div');
-            div.className = 'result-item result-item-previous';
-            div.innerHTML = `
-                <span class="result-number">${index + 1}</span>
-                <div style="display: inline-block;">
-                    <div class="result-name">${displayName}</div>
-                </div>
-            `;
-            elements.resultContainer.appendChild(div);
+            elements.resultContainer.appendChild(
+                createResultItem(index + 1, displayName, 'result-item-previous')
+            );
         });
     }
 
@@ -1074,7 +1116,8 @@ function displayResults() {
         ? `남은 학생 ${remainingCount}명으로 추가 선발`
         : '선발 가능한 학생이 없습니다';
 
-    // 결과 화면 표시
+    // 결과 화면 표시 — 입력/설정/결과는 하나의 공통 neutral 앱 UI 로 통일.
+    // 테마별 강한 무드는 animationContainer 안에서만 적용된다.
     elements.steps[3].style.display = 'none';
     elements.steps[3].classList.remove('active');
     elements.resultSection.style.display = 'block';
@@ -1149,6 +1192,9 @@ function continuePicking() {
         AppState.bgMusicInterval = null;
     }
 
+    // 이전 라운드 이름 발화 정리
+    cancelSpeech();
+
     // 결과 화면 숨기고 Step 3 (테마 선택)으로 이동
     elements.resultSection.style.display = 'none';
     elements.animationContainer.classList.remove('fullscreen-animation');
@@ -1198,6 +1244,9 @@ function resetSettings() {
         AppState.bgMusicInterval = null;
     }
 
+    // 이름 발화 정리
+    cancelSpeech();
+
     // UI 초기화
     elements.resultSection.style.display = 'none';
     elements.animationContainer.classList.remove('fullscreen-animation');
@@ -1236,6 +1285,9 @@ function resetApp() {
     AppState.isPaused = false;
     AppState.shouldStop = false;
     AppState.pickedStudentsLive = [];
+
+    // 이름 발화 정리
+    cancelSpeech();
 
     // 앰비언트 사운드 중지
     if (AppState.ambientSoundInterval) {
@@ -1292,6 +1344,116 @@ function announceToScreenReader(message) {
             }, 3000);
         }, 100);
     }
+}
+
+// ===== 이름 음성 안내 (TTS) =====
+//
+// 브라우저 내장 Web Speech API(window.speechSynthesis) 로 선발 순간 이름을 음성 재생한다.
+//  - 외부 음원/API 키 없이 동작 → 정적 배포(GitHub Pages) 그대로 유지.
+//  - 스크린리더 사용 시 음성이 이중으로 들리므로 사용자가 토글로 끌 수 있다 (기본 켜짐).
+//  - 미지원 브라우저에서는 모든 호출이 조용히 무시되어 기존 흐름에 영향이 없다.
+//  - getDisplayName() 결과(동명이인 시 구분 정보 포함)를 그대로 읽어 화면 표시와 음성을 일치시킨다.
+
+const TTS_STORAGE_KEY = 'pickme-tts-enabled';
+let _ttsVoice = null; // 선택된 한국어 음성 (voiceschanged 후 캐시)
+
+function _ttsSupported() {
+    return typeof window !== 'undefined' && 'speechSynthesis' in window
+        && typeof window.SpeechSynthesisUtterance === 'function';
+}
+
+// getVoices() 에서 한국어 음성을 고른다. 없으면 null (OS 기본 음성 사용).
+function _pickKoreanVoice() {
+    if (!_ttsSupported()) return null;
+    const voices = window.speechSynthesis.getVoices();
+    if (!voices || !voices.length) return null;
+    return voices.find(v => v.lang === 'ko-KR')
+        || voices.find(v => v.lang && v.lang.toLowerCase().startsWith('ko'))
+        || null;
+}
+
+// 초기화 — localStorage 복원 + voices 비동기 로드 대응. DOMContentLoaded 시 1회 호출.
+function initTts() {
+    // 미지원 브라우저: 토글 비활성화 + 안내, 기능 차단
+    if (!_ttsSupported()) {
+        AppState.ttsEnabled = false;
+        if (elements.ttsToggle) {
+            elements.ttsToggle.checked = false;
+            elements.ttsToggle.disabled = true;
+        }
+        return;
+    }
+
+    // 저장된 설정 복원 (기본 켜짐)
+    const saved = localStorage.getItem(TTS_STORAGE_KEY);
+    AppState.ttsEnabled = saved === null ? true : saved === 'true';
+    if (elements.ttsToggle) {
+        elements.ttsToggle.checked = AppState.ttsEnabled;
+    }
+
+    // 한국어 음성 캐시 — voices 는 비동기 로드되므로 이벤트로 갱신
+    _ttsVoice = _pickKoreanVoice();
+    if (typeof window.speechSynthesis.addEventListener === 'function') {
+        window.speechSynthesis.addEventListener('voiceschanged', () => {
+            _ttsVoice = _pickKoreanVoice();
+        });
+    } else {
+        window.speechSynthesis.onvoiceschanged = () => {
+            _ttsVoice = _pickKoreanVoice();
+        };
+    }
+}
+
+// 선발 순간 이름 발화. 토글이 꺼져 있거나 미지원이면 조용히 무시.
+function speakStudentName(name) {
+    if (!AppState.ttsEnabled || !_ttsSupported() || !name) return;
+    try {
+        const utterance = new SpeechSynthesisUtterance(String(name));
+        utterance.lang = 'ko-KR';
+        utterance.rate = 1.05; // 교실 빔프로젝터에서 또렷하게
+        if (!_ttsVoice) _ttsVoice = _pickKoreanVoice();
+        if (_ttsVoice) utterance.voice = _ttsVoice;
+        window.speechSynthesis.speak(utterance);
+    } catch (error) {
+        // TTS 실패가 선발 흐름을 막지 않도록 무시
+        console.warn('TTS speak failed:', error);
+    }
+}
+
+// 발화 큐 비우기 — 일시정지/중단/리셋 시 호출해 멈춘 뒤 이름이 계속 읽히지 않게 한다.
+function cancelSpeech() {
+    if (!_ttsSupported()) return;
+    try {
+        window.speechSynthesis.cancel();
+    } catch (error) {
+        // 무시
+    }
+}
+
+// 첫 발화 unlock (iOS Safari 등은 user gesture 안에서 1회 speak 필요). 선발 시작 클릭 시 호출.
+function warmUpTts() {
+    if (!AppState.ttsEnabled || !_ttsSupported()) return;
+    try {
+        if (!_ttsVoice) _ttsVoice = _pickKoreanVoice();
+        const primer = new SpeechSynthesisUtterance(' ');
+        primer.volume = 0; // 무음 — 엔진만 깨운다
+        window.speechSynthesis.speak(primer);
+    } catch (error) {
+        // 무시
+    }
+}
+
+// 토글 change 핸들러 — 상태 저장 + 끌 때 진행 중 발화 정리.
+function handleTtsToggle() {
+    if (!elements.ttsToggle) return;
+    AppState.ttsEnabled = elements.ttsToggle.checked;
+    try {
+        localStorage.setItem(TTS_STORAGE_KEY, String(AppState.ttsEnabled));
+    } catch (error) {
+        // localStorage 불가 환경 무시
+    }
+    if (!AppState.ttsEnabled) cancelSpeech();
+    announceToScreenReader(AppState.ttsEnabled ? '이름 음성 안내를 켰습니다' : '이름 음성 안내를 껐습니다');
 }
 
 // ===== 직접 입력 기능 =====
@@ -1448,39 +1610,243 @@ function loadRecentClass(id) {
     announceToScreenReader(`${found.label} 불러옴. ${AppState.students.length}명`);
 }
 
-function renderRecentPreview(students) {
-    elements.recentPreviewList.innerHTML = '';
-    elements.recentPreviewCount.textContent = students.length;
-    elements.recentPreviewSection.style.display = 'block';
+// 공통 편집 가능 미리보기 헬퍼
+// 세 입력 경로(직접 입력 / 파일 업로드 / 최근 학급)가 모두 이 함수를 호출한다.
+// 이름·번호·성별 편집 + 삭제 + 추가를 일관되게 제공하며, store 갱신은 콜백에 위임한다.
+function renderEditablePreview({ containerEl, countEl, sectionEl, students, onUpdate, onDelete, onAdd }) {
+    // 재렌더링 시 추가 input에 입력 중이던 값 보존
+    const previousAddValue = containerEl.querySelector('.preview-add-input')?.value || '';
 
-    students.forEach(student => {
+    containerEl.innerHTML = '';
+    countEl.textContent = students.length;
+    // 학생이 없어도 추가 영역은 보여야 하므로 onAdd가 있으면 섹션을 띄운다
+    sectionEl.style.display = (students.length > 0 || onAdd) ? 'block' : 'none';
+
+    students.forEach((student, index) => {
         const div = document.createElement('div');
         div.className = 'preview-item';
 
         const info = document.createElement('div');
         info.className = 'preview-info';
 
-        const nameLine = document.createElement('div');
-        nameLine.className = 'preview-name';
-        nameLine.textContent = student.name;
-        info.appendChild(nameLine);
+        // 이름 (편집 가능)
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.className = 'preview-name-input';
+        nameInput.value = student.name;
+        nameInput.setAttribute('aria-label', `${student.name} 이름`);
+        nameInput.addEventListener('change', (e) => {
+            const newName = e.target.value.trim();
+            if (newName.length === 0) {
+                // 빈 이름은 허용하지 않음 — 원래 값 복원
+                e.target.value = student.name;
+                return;
+            }
+            onUpdate(index, 'name', newName);
+        });
+        info.appendChild(nameInput);
 
-        const details = [];
-        if (student.grade !== '-') details.push(`${student.grade}학년`);
-        if (student.class !== '-') details.push(`${student.class}반`);
-        if (student.number !== '-') details.push(`${student.number}번`);
-        if (student.gender !== '-') details.push(student.gender);
+        // 상세 정보 (학년/반/번호/성별)
+        const detailLine = document.createElement('div');
+        detailLine.className = 'preview-details-editable';
 
-        if (details.length > 0) {
-            const detailLine = document.createElement('div');
-            detailLine.className = 'preview-details-editable';
-            detailLine.textContent = details.join(' ');
-            info.appendChild(detailLine);
+        // 학년/반 (읽기 전용)
+        if (student.grade !== '-' || student.class !== '-') {
+            const gradeClass = document.createElement('span');
+            gradeClass.className = 'preview-grade-class';
+            const parts = [];
+            if (student.grade !== '-') parts.push(`${student.grade}학년`);
+            if (student.class !== '-') parts.push(`${student.class}반`);
+            gradeClass.textContent = parts.join(' ');
+            detailLine.appendChild(gradeClass);
         }
 
+        // 번호 (편집 가능)
+        const numberWrapper = document.createElement('span');
+        numberWrapper.className = 'preview-number-wrapper';
+        const numberInput = document.createElement('input');
+        numberInput.type = 'text';
+        numberInput.className = 'preview-number-input';
+        numberInput.value = student.number === '-' ? '' : student.number;
+        numberInput.placeholder = '번호';
+        numberInput.setAttribute('aria-label', `${student.name} 번호`);
+        numberInput.addEventListener('change', (e) => onUpdate(index, 'number', e.target.value));
+        numberWrapper.appendChild(numberInput);
+        numberWrapper.appendChild(document.createTextNode('번'));
+        detailLine.appendChild(numberWrapper);
+
+        // 성별 (편집 가능 - 토글)
+        const genderToggleContainer = document.createElement('div');
+        genderToggleContainer.className = 'preview-gender-toggle';
+        genderToggleContainer.setAttribute('role', 'radiogroup');
+        genderToggleContainer.setAttribute('aria-label', `${student.name} 성별 선택`);
+
+        const genderOptions = [
+            { value: '여', text: '여' },
+            { value: '남', text: '남' },
+            { value: '-', text: '표기 안 함' }
+        ];
+
+        genderOptions.forEach(opt => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'preview-gender-btn';
+            if (opt.value === student.gender) {
+                btn.classList.add('active');
+                btn.setAttribute('aria-checked', 'true');
+            } else {
+                btn.setAttribute('aria-checked', 'false');
+            }
+            btn.textContent = opt.text;
+            btn.setAttribute('role', 'radio');
+            btn.setAttribute('data-value', opt.value);
+            btn.addEventListener('click', () => {
+                genderToggleContainer.querySelectorAll('.preview-gender-btn').forEach(b => {
+                    b.classList.remove('active');
+                    b.setAttribute('aria-checked', 'false');
+                });
+                btn.classList.add('active');
+                btn.setAttribute('aria-checked', 'true');
+                onUpdate(index, 'gender', opt.value);
+            });
+            genderToggleContainer.appendChild(btn);
+        });
+
+        detailLine.appendChild(genderToggleContainer);
+        info.appendChild(detailLine);
+
+        // 삭제 버튼
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'preview-item-delete';
+        deleteBtn.textContent = '삭제';
+        deleteBtn.setAttribute('aria-label', `${student.name} 삭제`);
+        deleteBtn.addEventListener('click', () => onDelete(index));
+
         div.appendChild(info);
-        elements.recentPreviewList.appendChild(div);
+        div.appendChild(deleteBtn);
+        containerEl.appendChild(div);
     });
+
+    // 추가 영역 (리스트 마지막)
+    if (onAdd) {
+        const addRow = document.createElement('div');
+        addRow.className = 'preview-add-row';
+
+        const addInput = document.createElement('input');
+        addInput.type = 'text';
+        addInput.className = 'preview-add-input';
+        addInput.placeholder = '학생 추가 (이름 입력)';
+        addInput.value = previousAddValue;
+        addInput.setAttribute('aria-label', '새 학생 이름 입력');
+
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'preview-add-btn';
+        addBtn.textContent = '+ 추가';
+        addBtn.setAttribute('aria-label', '학생 추가');
+
+        const handleAdd = () => {
+            const name = addInput.value.trim();
+            if (name.length === 0) {
+                addInput.focus();
+                return;
+            }
+            // 캡처 전에 비워서 재렌더링된 새 input이 빈 상태로 시작하도록 함
+            addInput.value = '';
+            onAdd(name);
+            // 재렌더링 후 새 입력란에 포커스 (연속 추가 편의)
+            const nextInput = containerEl.querySelector('.preview-add-input');
+            if (nextInput) nextInput.focus();
+        };
+
+        addBtn.addEventListener('click', handleAdd);
+        addInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleAdd();
+            }
+        });
+
+        addRow.appendChild(addInput);
+        addRow.appendChild(addBtn);
+        containerEl.appendChild(addRow);
+    }
+}
+
+// 기존 학생들로부터 학년/반/다음 번호 추론
+// 모두 같은 값이면 그 값으로, 다르면 '-'. 번호는 최대값 + 1.
+function inferDefaultsFromStudents(students) {
+    if (!students || students.length === 0) {
+        return { grade: '-', class: '-', number: '-' };
+    }
+    const grades = new Set(students.map(s => s.grade));
+    const classes = new Set(students.map(s => s.class));
+    const numbers = students
+        .map(s => parseInt(s.number, 10))
+        .filter(n => !isNaN(n));
+    return {
+        grade: grades.size === 1 ? [...grades][0] : '-',
+        class: classes.size === 1 ? [...classes][0] : '-',
+        number: numbers.length > 0 ? String(Math.max(...numbers) + 1) : '-'
+    };
+}
+
+// 최근 학급 미리보기 (편집 가능, localStorage 자동 동기화)
+function renderRecentPreview(students) {
+    renderEditablePreview({
+        containerEl: elements.recentPreviewList,
+        countEl: elements.recentPreviewCount,
+        sectionEl: elements.recentPreviewSection,
+        students,
+        onUpdate: (index, field, value) => {
+            if (!AppState.students[index]) return;
+            if (field === 'name') {
+                AppState.students[index].name = value;
+            } else if (field === 'number') {
+                AppState.students[index].number = value.trim() || '-';
+            } else if (field === 'gender') {
+                AppState.students[index].gender = value;
+            }
+            updateRecentClassInStorage(AppState._loadedRecentClassId, AppState.students);
+            renderRecentPreview(AppState.students);
+        },
+        onDelete: (index) => {
+            AppState.students.splice(index, 1);
+            updateRecentClassInStorage(AppState._loadedRecentClassId, AppState.students);
+            renderRecentPreview(AppState.students);
+            elements.totalStudents.textContent = AppState.students.length;
+            announceToScreenReader(`학생이 삭제되었습니다. 현재 ${AppState.students.length}명`);
+            if (AppState.students.length === 0) {
+                elements.step1Next.disabled = true;
+                elements.studentCount.style.display = 'none';
+            }
+        },
+        onAdd: (name) => {
+            const defaults = inferDefaultsFromStudents(AppState.students);
+            AppState.students.push({ name, ...defaults, gender: '-' });
+            updateRecentClassInStorage(AppState._loadedRecentClassId, AppState.students);
+            renderRecentPreview(AppState.students);
+            elements.totalStudents.textContent = AppState.students.length;
+            elements.studentCount.style.display = 'block';
+            elements.step1Next.disabled = false;
+            announceToScreenReader(`${name} 추가됨. 현재 ${AppState.students.length}명`);
+        }
+    });
+}
+
+// 최근 학급 localStorage 동기화
+function updateRecentClassInStorage(id, students) {
+    if (!id) return;
+    const classes = loadRecentClasses();
+    const idx = classes.findIndex(c => c.id === id);
+    if (idx === -1) return;
+    classes[idx].students = students.map(s => ({ ...s }));
+    classes[idx].timestamp = Date.now();
+    try {
+        localStorage.setItem(RECENT_CLASSES_KEY, JSON.stringify(classes));
+    } catch (e) {
+        console.warn('최근 학급 업데이트 실패:', e);
+    }
 }
 
 function deleteRecentClass(id) {
@@ -1585,207 +1951,83 @@ function parseManualNames(text) {
         .filter(name => name.length > 0);
 }
 
-// 미리보기 렌더링
+// 직접 입력 미리보기 (편집 가능)
+// textarea가 source of truth — 이름/삭제는 textarea도 함께 갱신한다.
 function renderPreview(students) {
-    elements.previewList.innerHTML = '';
-    elements.previewCount.textContent = students.length;
-    elements.manualPreviewSection.style.display = 'block';
-
-    students.forEach((student, index) => {
-        const div = document.createElement('div');
-        div.className = 'preview-item';
-
-        // 학생 정보
-        const info = document.createElement('div');
-        info.className = 'preview-info';
-
-        // 이름 (읽기 전용)
-        const nameLine = document.createElement('div');
-        nameLine.className = 'preview-name';
-        nameLine.textContent = student.name;
-        info.appendChild(nameLine);
-
-        // 상세 정보 (편집 가능)
-        const detailLine = document.createElement('div');
-        detailLine.className = 'preview-details-editable';
-
-        // 학년/반 (읽기 전용)
-        if (student.grade !== '-' || student.class !== '-') {
-            const gradeClass = document.createElement('span');
-            gradeClass.className = 'preview-grade-class';
-            const parts = [];
-            if (student.grade !== '-') parts.push(`${student.grade}학년`);
-            if (student.class !== '-') parts.push(`${student.class}반`);
-            gradeClass.textContent = parts.join(' ');
-            detailLine.appendChild(gradeClass);
-        }
-
-        // 번호 (편집 가능)
-        const numberWrapper = document.createElement('span');
-        numberWrapper.className = 'preview-number-wrapper';
-        const numberInput = document.createElement('input');
-        numberInput.type = 'text';
-        numberInput.className = 'preview-number-input';
-        numberInput.value = student.number === '-' ? '' : student.number;
-        numberInput.placeholder = '번호';
-        numberInput.setAttribute('aria-label', `${student.name} 번호`);
-        numberInput.addEventListener('change', (e) => updatePreviewItem(index, 'number', e.target.value));
-        numberWrapper.appendChild(numberInput);
-        numberWrapper.appendChild(document.createTextNode('번'));
-        detailLine.appendChild(numberWrapper);
-
-        // 성별 (편집 가능 - 토글)
-        const genderToggleContainer = document.createElement('div');
-        genderToggleContainer.className = 'preview-gender-toggle';
-        genderToggleContainer.setAttribute('role', 'radiogroup');
-        genderToggleContainer.setAttribute('aria-label', `${student.name} 성별 선택`);
-
-        const genderOptions = [
-            { value: '여', text: '여' },
-            { value: '남', text: '남' },
-            { value: '-', text: '표기 안 함' }
-        ];
-
-        genderOptions.forEach(opt => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'preview-gender-btn';
-            if (opt.value === student.gender) {
-                btn.classList.add('active');
-                btn.setAttribute('aria-checked', 'true');
-            } else {
-                btn.setAttribute('aria-checked', 'false');
+    renderEditablePreview({
+        containerEl: elements.previewList,
+        countEl: elements.previewCount,
+        sectionEl: elements.manualPreviewSection,
+        students,
+        onUpdate: (index, field, value) => {
+            if (!AppState.tempStudents || !AppState.tempStudents[index]) return;
+            if (field === 'name') {
+                AppState.tempStudents[index].name = value;
+                // textarea도 동기화 (이름만 모아서 join)
+                elements.manualNames.value = AppState.tempStudents.map(s => s.name).join('\n');
+                renderPreview(AppState.tempStudents);
+            } else if (field === 'number') {
+                AppState.tempStudents[index].number = value.trim() || '-';
+            } else if (field === 'gender') {
+                AppState.tempStudents[index].gender = value;
             }
-            btn.textContent = opt.text;
-            btn.setAttribute('role', 'radio');
-            btn.setAttribute('data-value', opt.value);
-            btn.addEventListener('click', () => {
-                // 같은 그룹의 모든 버튼 비활성화
-                genderToggleContainer.querySelectorAll('.preview-gender-btn').forEach(b => {
-                    b.classList.remove('active');
-                    b.setAttribute('aria-checked', 'false');
-                });
-                // 현재 버튼 활성화
-                btn.classList.add('active');
-                btn.setAttribute('aria-checked', 'true');
-                // 값 업데이트
-                updatePreviewItem(index, 'gender', opt.value);
-            });
-            genderToggleContainer.appendChild(btn);
-        });
-
-        detailLine.appendChild(genderToggleContainer);
-
-        info.appendChild(detailLine);
-
-        // 삭제 버튼
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'preview-item-delete';
-        deleteBtn.textContent = '삭제';
-        deleteBtn.setAttribute('aria-label', `${student.name} 삭제`);
-        deleteBtn.addEventListener('click', () => deletePreviewItem(index));
-
-        div.appendChild(info);
-        div.appendChild(deleteBtn);
-        elements.previewList.appendChild(div);
+        },
+        onDelete: (index) => {
+            // textarea와 tempStudents 동시 갱신 후 재파싱 트리거
+            const names = parseManualNames(elements.manualNames.value.trim());
+            names.splice(index, 1);
+            elements.manualNames.value = names.join('\n');
+            handleManualInput();
+        },
+        onAdd: (name) => {
+            // textarea에 한 줄 추가 → handleManualInput이 자동번호/학년/반을 자동 적용
+            const current = elements.manualNames.value.trim();
+            elements.manualNames.value = current ? current + '\n' + name : name;
+            handleManualInput();
+            announceToScreenReader(`${name} 추가됨`);
+        }
     });
 }
 
-// 미리보기 항목 업데이트
-function updatePreviewItem(index, field, value) {
-    if (!AppState.tempStudents || !AppState.tempStudents[index]) return;
-
-    // 값 업데이트
-    if (field === 'number') {
-        AppState.tempStudents[index].number = value.trim() || '-';
-    } else if (field === 'gender') {
-        AppState.tempStudents[index].gender = value;
-    }
-}
-
-// 미리보기 항목 삭제
-function deletePreviewItem(index) {
-    // 현재 이름 목록 가져오기
-    const namesText = elements.manualNames.value.trim();
-    const names = parseManualNames(namesText);
-
-    // 해당 인덱스 삭제
-    names.splice(index, 1);
-
-    // textarea 업데이트
-    elements.manualNames.value = names.join('\n');
-
-    // 미리보기 재렌더링
-    handleManualInput();
-}
-
-// CSV 미리보기 렌더링 (비밀선발 제외)
+// CSV(파일 업로드) 미리보기 (편집 가능)
 function renderCsvPreview(students) {
-    elements.csvPreviewList.innerHTML = '';
-    elements.csvPreviewCount.textContent = students.length;
-    elements.csvPreviewSection.style.display = 'block';
-
-    students.forEach((student, index) => {
-        const div = document.createElement('div');
-        div.className = 'preview-item';
-
-        // 학생 정보
-        const info = document.createElement('div');
-        info.className = 'preview-info';
-
-        // 이름
-        const nameLine = document.createElement('div');
-        nameLine.className = 'preview-name';
-        nameLine.textContent = student.name;
-        info.appendChild(nameLine);
-
-        // 상세 정보 (학년, 반, 번호, 성별)
-        const detailLine = document.createElement('div');
-        detailLine.className = 'preview-details-editable';
-
-        const details = [];
-        if (student.grade !== '-') details.push(`${student.grade}학년`);
-        if (student.class !== '-') details.push(`${student.class}반`);
-        if (student.number !== '-') details.push(`${student.number}번`);
-        if (student.gender !== '-') details.push(student.gender);
-
-        detailLine.textContent = details.join(' ');
-        info.appendChild(detailLine);
-
-        // 삭제 버튼
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'preview-item-delete';
-        deleteBtn.textContent = '삭제';
-        deleteBtn.setAttribute('aria-label', `${student.name} 삭제`);
-        deleteBtn.addEventListener('click', () => deleteCsvPreviewItem(index));
-
-        div.appendChild(info);
-        div.appendChild(deleteBtn);
-        elements.csvPreviewList.appendChild(div);
+    renderEditablePreview({
+        containerEl: elements.csvPreviewList,
+        countEl: elements.csvPreviewCount,
+        sectionEl: elements.csvPreviewSection,
+        students,
+        onUpdate: (index, field, value) => {
+            if (!AppState.students[index]) return;
+            if (field === 'name') {
+                AppState.students[index].name = value;
+            } else if (field === 'number') {
+                AppState.students[index].number = value.trim() || '-';
+            } else if (field === 'gender') {
+                AppState.students[index].gender = value;
+            }
+        },
+        onDelete: (index) => {
+            AppState.students.splice(index, 1);
+            renderCsvPreview(AppState.students);
+            elements.totalStudents.textContent = AppState.students.length;
+            elements.fileInfo.textContent = `${AppState.students.length}명`;
+            updateNextButtonLabel();
+            announceToScreenReader(`학생이 삭제되었습니다. 현재 ${AppState.students.length}명`);
+            if (AppState.students.length === 0) {
+                elements.step1Next.disabled = true;
+            }
+        },
+        onAdd: (name) => {
+            const defaults = inferDefaultsFromStudents(AppState.students);
+            AppState.students.push({ name, ...defaults, gender: '-' });
+            renderCsvPreview(AppState.students);
+            elements.totalStudents.textContent = AppState.students.length;
+            elements.fileInfo.textContent = `${AppState.students.length}명`;
+            updateNextButtonLabel();
+            elements.step1Next.disabled = false;
+            announceToScreenReader(`${name} 추가됨. 현재 ${AppState.students.length}명`);
+        }
     });
-}
-
-// CSV 미리보기 항목 삭제
-function deleteCsvPreviewItem(index) {
-    // AppState.students에서 삭제
-    AppState.students.splice(index, 1);
-
-    // 미리보기 재렌더링
-    renderCsvPreview(AppState.students);
-
-    // UI 업데이트
-    elements.totalStudents.textContent = AppState.students.length;
-    elements.fileInfo.textContent = `${AppState.students.length}명`;
-    updateNextButtonLabel();
-
-    // 스크린 리더 알림
-    announceToScreenReader(`학생이 삭제되었습니다. 현재 ${AppState.students.length}명`);
-
-    // 학생이 0명이 되면 다음 버튼 비활성화
-    if (AppState.students.length === 0) {
-        elements.step1Next.disabled = true;
-        elements.csvPreviewSection.style.display = 'none';
-    }
 }
 
 // CSV 파일 삭제
