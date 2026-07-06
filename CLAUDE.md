@@ -54,7 +54,7 @@ python -m http.server 8000
 - **테마 인터페이스**: 각 테마 함수는 `(canvas, selectedStudents, addPickedStudent)` 시그니처. `addPickedStudent` 콜백으로 선발 결과를 실시간 UI에 반영
 - **연속 선발**: `AppState.allPickedStudents[]`에 라운드별 선발 결과 누적. `startPicking()`이 누적 목록과 `name+number+grade+class` 키로 비교하여 이미 뽑힌 학생 자동 제외. 결과 화면에서 이번/이전 라운드 구분 표시
 - **일시정지**: `AppState.isPaused` / `AppState.shouldStop` 플래그로 애니메이션 루프 제어
-- **접근성**: ARIA 레이블, `aria-live` 영역, `announceToScreenReader()` 함수로 스크린 리더 지원. 키보드 네비게이션 지원
+- **접근성**: 기준 정본은 글로벌 접근성 헌장 `~/.claude/ACCESSIBILITY.md`(미니멀 ARIA — WCAG 실질 요구는 100%, 과잉 ARIA는 제거). 이 repo 고유 구현: `announceToScreenReader()`가 단일 live region에 상태 통지, Three.js 캔버스(SR 접근 불가)는 텍스트 대안 필수, 키보드 내비. ⚠ 신규/수정 시 "ARIA를 더 붙이는" 방향이 아니라 헌장의 "올바른 시맨틱 + 한 줄=한 객체"를 따른다(레거시 가산형 프레이밍 부활 금지)
 
 ### 외부 의존성
 
